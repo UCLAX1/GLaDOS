@@ -1,0 +1,90 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.env
+.venv
+env/
+venv/
+
+# Jupyter
+.ipynb_checkpoints
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ML model weights (large files — use HuggingFace/releases instead)
+*.pt
+*.pth
+*.bin
+*.gguf
+*.onnx
+*.safetensors
+*.nemo
+*.h5
+*.pb
+*.tflite
+*.pkl
+
+# TensorRT (hardware-specific, can't be shared anyway)
+*.engine
+*.trt
+*.plan
+
+# YOLO training runs
+runs/
+weights/
+
+# Datasets (never commit raw image data)
+datasets/
+data/images/
+data/labels/
+*.zip
+*.tar.gz
+
+# ROS2
+install/
+build/
+log/
+*.bag
+*.db3
+*.mcap
+
+# Weights & Biases / experiment tracking
+wandb/
+lightning_logs/
+checkpoints/
+mlruns/
+
+# Camera calibration (machine-specific)
+calibration/*.yaml
+calibration/*.json
+
+# Secrets / local config
+*.env
+configs/local_*.yaml
+configs/*_secret.yaml
+
+# Benchmark results
+benchmark/results/
+
+# macOS
+.DS_Store
+.AppleDouble
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Local scratch
+tmp/
+scratch/
