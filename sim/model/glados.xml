@@ -1,5 +1,7 @@
 <mujoco model="glados_arm">
 
+  <compiler angle="radian"/>
+
   <!-- Draw joint axes/pivots in the viewer -->
   <visual>
     <scale jointlength="0.05" jointwidth="0.003"/>
@@ -16,6 +18,7 @@
 
   <worldbody>
     <light name="top" pos="0 0 2" dir="0 0 -1" diffuse="0.8 0.8 0.8"/>
+    <geom name="floor" type="plane" size="2 2 0.1" pos="0 0 -0.5" rgba="0.3 0.3 0.3 0.5"/>
 
     <!-- Ceiling mount point — world center -->
     <body name="ceiling_mount" pos="0 0 0">
@@ -23,29 +26,32 @@
 
       <!-- Main swivel point  -->
       <body name="main_swivel" pos="0 0 -0.01">
-        <joint name="main_swivel_joint" type="hinge" axis="0 0 1" pos="0 0 0" limited="true" range="-180 180"/>
+        <joint name="main_swivel_joint" type="hinge" axis="0 0 1" pos="0 0 0" limited="true" range="-3.14159 3.14159"/>
         <geom type="cylinder" size="0.03 0.01"/>
 
         <!-- Upper arm, no movement -->
-        <body name="upper_arm" pos="-0.01477601 0 -0.06776682" quat="0.98877108 0 0.14943813 0">
+        <body name="upper_arm" pos="-0.01477601 0 -0.06776682" euler="0 0.3 0">
           <geom type="ellipsoid" size="0.03 0.02 0.05"/>
 
           <!-- Lower arm, pitches up and down -->
           <body name="lower_arm" pos="-0.01 0 -0.1">
-            <joint name="lower_arm_joint" type="hinge" axis="0 1 0" pos="0 0 0.04" ref="-30"/>
+            <joint name="lower_arm_joint" type="hinge" axis="0 1 0" pos="0 0 0.04" limited="true" range="-1.047 1.047"/>
             <geom type="ellipsoid" size="0.02 0.015 0.04"/>
 
             <!-- Neck, rotates -->
             <body name="neck" pos="-0.02 0 -0.025">
-              <joint name="neck_joint" type="hinge" axis="1 0 0" pos="0 0 0"/>
-              <geom type="cylinder" size="0.01 0.005" euler="0 90 0"/>
+              <joint name="neck_joint" type="hinge" axis="1 0 0" pos="0 0 0" limited="true" range="-0.785 0.785"/>
+              <geom type="cylinder" size="0.01 0.005" euler="0 1.5708 0"/>
 
               <!-- Head, pitches on the y axis -->
               <body name="head" pos="0 0 -0.06">
-                <joint name="head_joint" type="hinge" axis="0 1 0" pos="0 0 0"/>
-                <geom type="cylinder" size="0.03 0.015" euler="90 0 0"/>
+                <joint name="head_joint" type="hinge" axis="0 1 0" pos="0 0 0" limited="true" range="-1 1"/>
+                <geom type="cylinder" size="0.03 0.015" euler="1.5708 0 0"/>
 
-                <!-- eye, extends forward/back-->
+                <!-- This is the reference for inverse kinematics! -->
+                <site name="end_effector" pos="0 0 -0.05" size="0.0005" rgba="1 0 0 1"/>
+
+                <!-- eye, extends forward/back -->
                 <body name="eye" pos="0 0 -0.032">
                   <joint name="eye_joint" type="slide" axis="0 0 -1" pos="0 0 0" limited="true" range="-0.002 0.002"/>
                   <geom type="cylinder" size="0.0075 0.0025" euler="0 0 0"/>
@@ -59,7 +65,7 @@
     </body>
   </worldbody>
 
-  <!-- !!!! for clipping and stopping them from doing that -->
+  <!-- Disable self-collision between adjacent links -->
   <contact>
     <exclude body1="ceiling_mount" body2="main_swivel"/>
     <exclude body1="main_swivel" body2="upper_arm"/>
@@ -73,8 +79,8 @@
   <!-- Position-controlled actuators -->
   <actuator>
     <position name="main_swivel_actuator" joint="main_swivel_joint" kp="200" ctrlrange="-3.14159 3.14159"/>
-    <position name="lower_arm_actuator" joint="lower_arm_joint" kp="200"/>
-    <position name="neck_actuator" joint="neck_joint" kp="200"/>
+    <position name="lower_arm_actuator" joint="lower_arm_joint" kp="200" ctrlrange="-1.047 1.047"/>
+    <position name="neck_actuator" joint="neck_joint" kp="200" ctrlrange="-0.785 0.785"/>
     <position name="head_actuator" joint="head_joint" kp="200" ctrlrange="-1 1"/>
     <position name="eye_actuator" joint="eye_joint" kp="200" ctrlrange="-0.002 0.002"/>
   </actuator>
