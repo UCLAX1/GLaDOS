@@ -5,15 +5,22 @@
   <!-- Draw joint axes/pivots in the viewer -->
   <visual>
     <scale jointlength="0.05" jointwidth="0.003"/>
+    <headlight ambient="0.4 0.4 0.4"/>
   </visual>
 
   <!-- Physics settings -->
   <option timestep="0.002" gravity="0 0 -9.81"/>
 
+  <asset>
+    <material name="body"  rgba="0.95 0.93 0.90 1" shininess="0.4" specular="0.3"/>
+    <material name="eye"   rgba="1.0  0.78 0.0  1" shininess="1.0" specular="0.8" emission="0.4"/>
+    <material name="mount" rgba="0.2  0.2  0.2  1" shininess="0.2" specular="0.2"/>
+  </asset>
+
   <!-- Default joint/geom properties -->
   <default>
     <joint damping="0.5" armature="0.01"/>
-    <geom rgba="0.6 0.6 0.8 1" contype="1" conaffinity="1"/>
+    <geom material="body" contype="1" conaffinity="1"/>
   </default>
 
   <worldbody>
@@ -22,7 +29,7 @@
 
     <!-- Ceiling mount point — world center -->
     <body name="ceiling_mount" pos="0 0 0">
-      <geom type="box" size="0.05 0.05 0.005" rgba="0.3 0.3 0.3 1"/>
+      <geom type="box" size="0.05 0.05 0.005" material="mount"/>
 
       <!-- Main swivel point  -->
       <body name="main_swivel" pos="0 0 -0.01">
@@ -41,7 +48,7 @@
             <!-- Neck, rotates -->
             <body name="neck" pos="-0.02 0 -0.025">
               <joint name="neck_joint" type="hinge" axis="1 0 0" pos="0 0 0" limited="true" range="-0.785 0.785"/>
-              <geom type="cylinder" size="0.01 0.005" euler="0 1.5708 0"/>
+              <geom type="cylinder" size="0.01 0.005" euler="0 1.5708 0" rgba="0 0 0 1"/>
 
               <!-- Head, pitches on the y axis -->
               <body name="head" pos="0 0 -0.06">
@@ -54,7 +61,7 @@
                 <!-- eye, extends forward/back -->
                 <body name="eye" pos="0 0 -0.032">
                   <joint name="eye_joint" type="slide" axis="0 0 -1" pos="0 0 0" limited="true" range="-0.002 0.002"/>
-                  <geom type="cylinder" size="0.0075 0.0025" euler="0 0 0"/>
+                  <geom type="cylinder" size="0.0075 0.0025" euler="0 0 0" material="eye"/>
                 </body>
 
               </body>
