@@ -1,0 +1,23 @@
+{
+  "qwen2.5:7b": {
+    "date": "2026-08-09",
+    "persona": {"passed": 11, "total": 12, "pct": 91},
+    "format": {"passed": 17, "total": 19, "pct": 89},
+    "avg_latency": 3.49,
+    "latency": {"short": 4.63, "medium": 4.66, "long": 5.91}
+  },
+  "llama3.2:latest": {
+    "date": "2026-08-09",
+    "persona": {"passed": 9, "total": 12, "pct": 75},
+    "format": {"passed": 16, "total": 19, "pct": 84},
+    "avg_latency": 1.63,
+    "latency": {"short": 1.46, "medium": 1.82, "long": 2.09}
+  },
+  "hermes3:8b": {
+    "date": "2026-08-09",
+    "persona": {"passed": 7, "total": 12, "pct": 58},
+    "format": {"passed": 12, "total": 19, "pct": 63},
+    "avg_latency": 3.12,
+    "latency": {"short": 2.6, "medium": 4.63, "long": 4.13}
+  }
+}
