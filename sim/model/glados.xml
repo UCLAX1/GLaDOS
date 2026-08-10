@@ -4,6 +4,7 @@
 
   <!-- Draw joint axes/pivots in the viewer -->
   <visual>
+    <!-- <scale jointlength="0.9" jointwidth="0.9"/> -->
     <scale jointlength="0.05" jointwidth="0.003"/>
     <headlight ambient="0.4 0.4 0.4"/>
   </visual>

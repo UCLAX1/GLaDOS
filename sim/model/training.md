@@ -26,16 +26,16 @@ implies.
 
 ## Top-level sections of the file
 
-| Section | What it's for |
-|---|---|
-| `<compiler>` | Global parsing settings. `angle="radian"` means every angle in this file (joint ranges, `euler=...`) is in radians, not degrees. |
-| `<visual>` | Viewer-only cosmetics — here, how big the little joint-axis arrows are drawn. |
-| `<option>` | Physics engine settings: `timestep` (simulation step size, seconds) and `gravity`. |
-| `<asset>` | Reusable resources, here just `<material>`s (color/shininess) referenced by name later. |
-| `<default>` | Fallback attributes so you don't repeat yourself. Any `<joint>` here gets `damping="0.5"`, any `<geom>` gets `material="body"`, unless overridden locally. |
-| `<worldbody>` | The actual tree of bodies — this is the robot. |
-| `<contact>` | Collision rules (see below). |
-| `<actuator>` | The motors that drive the joints. |
+| Section         | What it's for                                                                                                                                                                                                        |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<compiler>`  | <br /><br />Global parsing settings.`angle="radian"` means every angle in this file (joint ranges, `euler=...`) is in radians, not degrees.                                                                      |
+| `<visual>`    | Viewer-only cosmetics — here, how big the little joint-axis arrows are drawn.                                                                                                                                       |
+| `<option>`    | <br />Physics engine settings:`timestep` (simulation step size, seconds) and `gravity`.                                                                                                                          |
+| `<asset>`     | Reusable resources, here just`<material>`s (color/shininess) referenced by name later.<br /><br />If you are familar with unity very much like the materials that you put onto game objects which in our case is  |
+| `<default>`   | Fallback attributes so you don't repeat yourself. Any`<joint>` here gets `damping="0.5"`, any `<geom>` gets `material="body"`, unless overridden locally.                                                    |
+| `<worldbody>` | The actual tree of bodies — this is the robot.                                                                                                                                                                      |
+| `<contact>`   | Collision rules (see below).                                                                                                                                                                                         |
+| `<actuator>`  | The motors that drive the joints.                                                                                                                                                                                    |
 
 ## Anatomy of one body
 
@@ -54,18 +54,19 @@ implies.
   - `type="hinge"` — rotates around an axis, like a door hinge. `axis="0 1 0"` = rotates about Y.
   - `type="slide"` — moves in a straight line instead of rotating (used once, for the eye).
   - `range="-1.047 1.047"` — motion limits in radians (≈ ±60°), enforced because `limited="true"`.
+  - `pos = "0 0 0.04"`- shows you the point where the object pivots about. 0 0 0 represents the center of the object but in this case we are pivoting around the top of the lower arm
 - **`<geom>`** — the visible/collidable shape for this body (ellipsoid, cylinder, box, plane, ...).
   Purely cosmetic/collision — it has no effect on the kinematics above.
 
 ## Every joint in glados.xml
 
-| Joint | Type | Axis | Range | What it does |
-|---|---|---|---|---|
-| `main_swivel_joint` | hinge | Z | ±180° | Whole arm swivels left/right, like a lazy-susan base |
-| `lower_arm_joint` | hinge | Y | ±60° | Elbow — pitches the lower arm up/down |
-| `neck_joint` | hinge | X | ±45° | Rotates the head side-to-side (roll) |
-| `head_joint` | hinge | Y | ±57° | Nods the head up/down (pitch) |
-| `eye_joint` | slide | Z | ±2mm | Eye pokes in/out a couple millimeters |
+| Joint                 | Type  | Axis | Range   | What it does                                         |
+| --------------------- | ----- | ---- | ------- | ---------------------------------------------------- |
+| `main_swivel_joint` | hinge | Z    | ±180° | Whole arm swivels left/right, like a lazy-susan base |
+| `lower_arm_joint`   | hinge | Y    | ±60°  | Elbow — pitches the lower arm up/down               |
+| `neck_joint`        | hinge | X    | ±45°  | Rotates the head side-to-side (roll)                 |
+| `head_joint`        | hinge | Y    | ±57°  | Nods the head up/down (pitch)                        |
+| `eye_joint`         | slide | Z    | ±2mm   | Eye pokes in/out a couple millimeters                |
 
 `upper_arm` has no joint — it's a fixed rigid extension of `main_swivel`, just bent at an angle
 via its `euler="0 0.3 0"` (a static rotation baked into the body, not a moving joint).
