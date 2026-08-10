@@ -108,7 +108,7 @@ with Live(console=console, refresh_per_second=60) as live:
         elif is_speaking and not vad_detects_speech and time_since_vad_stopped_detecting_speech > FINISHED_SPEAKING_TIMEOUT_DURATION:
             is_speaking = False
 
-            audio_data = sr.AudioData(b"".join(frames), sample_rate=SAMPLE_RATE, sample_width=2) # 2 for 2 byte, 16 bit floats
+            audio_data = sr.AudioData(b"".join(frames), sample_rate=SAMPLE_RATE, sample_width=2) # 2 for 2 byte, 16 bit ints
             frames.clear()
 
             with open("microphone-results.wav", "wb") as f:
