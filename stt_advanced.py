@@ -73,48 +73,47 @@ class Transcriber():
 
         # return recognizer.recognize_faster_whisper(audio_data, language="en")
 
-# class TranscriptionWorker():
-#     def __init__(self, state_changed_event: threading.Event, transcriber: Transcriber, device):
-#         """
-#         device: either "cuda" or "cpu"
-#         """
-#         self.transcriber = transcriber
-#         self.audio_to_transcribe_queue: queue.Queue = queue.Queue() # queue of audio to be transcribed
+class TranscriptionWorker():
+    def __init__(self, state_changed_event: threading.Event, transcriber: Transcriber, device):
+        """
+        device: either "cuda" or "cpu"
+        """
+        self.transcriber = transcriber
+        self.audio_to_transcribe_queue: queue.Queue = queue.Queue() # queue of audio to be transcribed
 
-#         # may be multiple sentences
-#         self.latest_transcribed_text = ""
+        # may be multiple sentences
+        self.latest_transcribed_text = ""
 
-#         self.time_taken_to_transcribe = 0.0
+        self.time_taken_to_transcribe = 0.0
 
-#         self.state_changed_event = state_changed_event
-#         self._stop_event = threading.Event()
+        self.state_changed_event = state_changed_event
+        self._stop_event = threading.Event()
 
-#         self.thread = threading.Thread(target=self._worker, daemon=True)
-#         self.thread.start()
+        self.thread = threading.Thread(target=self._worker, daemon=True)
+        self.thread.start()
 
-#     def submit_transcription_request(self, chunks_to_transcribe):
-#         self.audio_to_transcribe_queue.put(chunks_to_transcribe)
+    def submit_transcription_request(self, chunks_to_transcribe):
+        self.audio_to_transcribe_queue.put(chunks_to_transcribe)
     
-#     def stop(self):
-#         self._stop_event.set()
-#         self.thread.join(timeout=1.0)
+    def stop(self):
+        self._stop_event.set()
+        self.thread.join(timeout=1.0)
 
 
-#     def _worker(self):
-#         while True:
-#             try:
-#                 speech_chunks = self.audio_to_transcribe_queue.get(timeout=0.1)
-#             except queue.Empty:
-#                 continue
+    def _worker(self):
+        while True:
+            try:
+                speech_chunks = self.audio_to_transcribe_queue.get(timeout=0.1)
+            except queue.Empty:
+                continue
 
-#             transcription_start_time = time.perf_counter()
+            transcription_start_time = time.perf_counter()
 
-#             self.latest_transcribed_text = self.transcriber.transcribe(speech_chunks)
+            self.latest_transcribed_text = self.transcriber.transcribe(speech_chunks)
 
-#             self.time_taken_to_transcribe = time.perf_counter() - transcription_start_time
+            self.time_taken_to_transcribe = time.perf_counter() - transcription_start_time
 
-#             # self.full_sentences.append(transcribed_text)
-#             self.state_changed_event.set()
+            self.state_changed_event.set()
 
 class Recorder():
 
@@ -141,28 +140,30 @@ class Recorder():
         self.silero_vad_model.to(self.vad_device)
 
         # when we first detect speech, it's only after a few ms of speech is said, and we need to add that to the buffer
-        self.pre_audio_chunks_rolling_buffer: collections.deque[bytes] = collections.deque(maxlen=self.PRE_AUDIO_CHUNK_BUFFER_SIZE) # rolling buffer of frame chunks
+        self.pre_audio_chunks_rolling_buffer: collections.deque[bytes] = collections.deque(
+            maxlen=self.PRE_AUDIO_CHUNK_BUFFER_SIZE
+        ) 
 
         # chunks with speech with the pre-audio chunks appended to the front
         self.speech_chunks: list[bytes] = []
 
         self.audio_queue: queue.Queue = queue.Queue()
-        self.transcription_queue: queue.Queue = queue.Queue() # queue of audio to be transcribed
+
+        self.state_changed_event = threading.Event()
 
         print("loading transcriber...")
         self.transcriber = Transcriber(device=self.transcriber_device)
         print("done loading transcriber")
 
-        self.transcribed_text_in_progress = ""
-        self.pre_transcribed_text_in_progress = ""
-        self.displayed_text = ""
-        self.full_sentences = []
-        # self.ready_to_submit_final_transcription = False
+        self.transcription_worker = TranscriptionWorker(
+            state_changed_event=self.state_changed_event,
+            transcriber=self.transcriber,
+            device=self.transcriber_device
+        )
 
         self.time_start = time.time()
         self.time_vad_detects_speech_stop = time.time()
         self.time_since_vad_stopped_detecting_speech = time.time()
-        self.time_taken_to_transcribe = 0.0
         self.time_taken_to_detect_voice = 0.0
 
         self.vad_detects_speech_previous = False
@@ -181,11 +182,6 @@ class Recorder():
         self.vad_thread = threading.Thread(target=self._vad_worker, daemon=True)
         self.vad_thread.start()
 
-        self.transcription_thread = threading.Thread(target=self._transcription_worker, daemon=True)
-        self.transcription_thread.start()
-
-        self.state_changed_event = threading.Event()
-
         self.stream = self.audio.open(
             format=pyaudio.paInt16,
             channels=self.NUM_CHANNELS,
@@ -202,29 +198,16 @@ class Recorder():
     def record(self, timeout=SECONDS_PER_CHUNK):
         self.state_changed_event.wait(timeout=timeout)
         self.state_changed_event.clear()
+    
+    def get_latest_transcribed_text(self):
+        return self.transcription_worker.latest_transcribed_text
 
     def _on_new_audio_chunk_callback(self, audio_chunk: bytes, frame_count: int, time_info: dict, status: int) -> tuple:
         self.audio_queue.put(audio_chunk)
         return (None, pyaudio.paContinue)
 
-    def _transcription_worker(self):
-        while True:
-            try:
-                speech_chunks = self.transcription_queue.get(timeout=0.05)
-            except queue.Empty:
-                continue
-
-            transcription_start_time = time.perf_counter()
-
-            transcribed_text = self.transcriber.transcribe(speech_chunks)
-
-            self.time_taken_to_transcribe = time.perf_counter() - transcription_start_time
-
-            self.full_sentences.append(transcribed_text)
-            self.state_changed_event.set()
-    
-    def _send_transcription_request(self, chunks_to_transcribe):
-        self.transcription_queue.put(chunks_to_transcribe)
+    def _submit_transcription_request(self, chunks_to_transcribe: list[bytes]):
+        self.transcription_worker.submit_transcription_request(chunks_to_transcribe)
 
     def _vad_worker(self):
 
@@ -295,7 +278,7 @@ class Recorder():
                     self.is_speaking = False
 
                     completed_speech = list(self.speech_chunks)
-                    self._send_transcription_request(completed_speech)
+                    self._submit_transcription_request(completed_speech)
                     self.speech_chunks.clear()
 
                     # print("writing audio data to file")
@@ -317,6 +300,9 @@ task_id = progress.add_task("vad", total=100)
 
 console = Console()
 
+previous_transcribed_text = ""
+full_sentences: list[str] = []
+
 recorder = Recorder()
 
 print("Listening...")
@@ -333,20 +319,21 @@ with Live(console=console, refresh_per_second=60) as live:
 
             progress.update(task_id, completed=recorder.speech_confidence * 100)
 
-            rich_text = Text()
-            for i, sentence in enumerate(recorder.full_sentences):
+            transcribed_rich_text = Text()
+
+            for i, sentence in enumerate(full_sentences):
                 if i % 2 == 0:
                     #rich_text += Text(sentence, style="bold yellow") + Text(" ")
-                    rich_text += Text(sentence, style="yellow") + Text(" ")
+                    transcribed_rich_text += Text(sentence, style="yellow") + Text(" ")
                 else:
-                    rich_text += Text(sentence, style="cyan") + Text(" ")
+                    transcribed_rich_text += Text(sentence, style="cyan") + Text(" ")
 
-            # new_displayed_text = rich_text.plain
+            new_transcribed_text = recorder.get_latest_transcribed_text()
 
-            # if new_displayed_text != displayed_text:
-            #     displayed_text = new_displayed_text
-                # panel = Panel(rich_text, title="[bold green]Live Transcription[/bold green]", border_style="bold green")
-                # live.update(panel)
+            if new_transcribed_text != previous_transcribed_text:
+                full_sentences.append(new_transcribed_text)
+                previous_transcribed_text = new_transcribed_text
+
 
             """Creates a table combining the bar and the boolean indicator."""
             table = Table.grid(expand=True)
@@ -361,16 +348,20 @@ with Live(console=console, refresh_per_second=60) as live:
 
             table.add_row(progress, status)
             table.add_row(Text(f"size of buffer: {len(recorder.pre_audio_chunks_rolling_buffer)}"))
-            table.add_row(Text(f"time taken to transcribe: {recorder.time_taken_to_transcribe}"))
+            table.add_row(Text(f"time taken to transcribe: {recorder.transcription_worker.time_taken_to_transcribe}"))
             table.add_row(Text(f"time taken to detect voice: {recorder.time_taken_to_detect_voice}"))
             table.add_row(Text(f"time taken to record: {time_taken_to_record}"))
             table.add_row(Text(f"size of queue: {recorder.audio_queue.qsize()}"))
             # table.add_row(Text(f"time since detected speech stop: {time_since_vad_stopped_detecting_speech}"))
-            table.add_row(rich_text)
+            table.add_row(transcribed_rich_text)
             panel = Panel(table, title="[bold]Live VAD Monitor[/bold]", border_style="blue")
             live.update(panel)
 
             # END DISPLAYING STUFF TO CONSOLE
+    except KeyboardInterrupt as e:
+        print(e)
+        exit(1)
+
     except Exception as e:
         print(e)
         exit(1)
