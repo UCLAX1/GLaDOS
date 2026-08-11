@@ -20,12 +20,15 @@
 from silero_vad import load_silero_vad, read_audio, get_speech_timestamps
 import speech_recognition as sr
 from faster_whisper import WhisperModel
+import torch
 import pyaudio
 import audioop
 import numpy as np
 import torch
 import time
+import queue
 import collections
+import threading
 from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
@@ -36,12 +39,275 @@ from rich.text import Text
 def int16_bytes_to_normalized_float32_ndarray(int16_bytes: bytes) -> np.ndarray:
     return np.frombuffer(int16_bytes, dtype=np.int16).astype(np.float32) / 32768.0
 
-def int16_byte_list_to_normalized_float32_ndarray(int16_byte_list: list[bytes]) -> np.ndarray:
-    return int16_bytes_to_normalized_float32_ndarray(b"".join(int16_byte_list))
+def int16_bytes_list_to_normalized_float32_ndarray(int16_bytes_list: list[bytes]) -> np.ndarray:
+    return int16_bytes_to_normalized_float32_ndarray(b"".join(int16_bytes_list))
 
 
 def round_to_nearest(n, m):
     return (n + m - 1) // m * m
+
+class Transcriber():
+
+    def __init__(self, device):
+        """
+        device: either "cuda" or "cpu"
+        """
+
+        # super accurate but kinda slow
+        self.faster_whisper_model = WhisperModel("distil-large-v3", device=device, compute_type="float16")
+
+        # pretty accurate and about 4-5 times faster
+        # self.faster_whisper_model = WhisperModel("distil-small.en", device="cuda", compute_type="float16")
+
+        # recognizer = sr.Recognizer()
+
+    def transcribe(self, speech_chunks: list[bytes]) -> str:
+        transcribed_text = ""
+
+        speech_chunks_float32: np.ndarray = int16_bytes_list_to_normalized_float32_ndarray(speech_chunks)
+        # segments, info = self.faster_whisper_model.transcribe(speech_chunks_float32, language="en", condition_on_previous_text=True)
+        segments, info = self.faster_whisper_model.transcribe(speech_chunks_float32, language="en", condition_on_previous_text=False)
+        for segment in segments:
+            transcribed_text += segment.text
+        return transcribed_text
+
+        # return recognizer.recognize_faster_whisper(audio_data, language="en")
+
+# class TranscriptionWorker():
+#     def __init__(self, state_changed_event: threading.Event, transcriber: Transcriber, device):
+#         """
+#         device: either "cuda" or "cpu"
+#         """
+#         self.transcriber = transcriber
+#         self.audio_to_transcribe_queue: queue.Queue = queue.Queue() # queue of audio to be transcribed
+
+#         # may be multiple sentences
+#         self.latest_transcribed_text = ""
+
+#         self.time_taken_to_transcribe = 0.0
+
+#         self.state_changed_event = state_changed_event
+#         self._stop_event = threading.Event()
+
+#         self.thread = threading.Thread(target=self._worker, daemon=True)
+#         self.thread.start()
+
+#     def submit_transcription_request(self, chunks_to_transcribe):
+#         self.audio_to_transcribe_queue.put(chunks_to_transcribe)
+    
+#     def stop(self):
+#         self._stop_event.set()
+#         self.thread.join(timeout=1.0)
+
+
+#     def _worker(self):
+#         while True:
+#             try:
+#                 speech_chunks = self.audio_to_transcribe_queue.get(timeout=0.1)
+#             except queue.Empty:
+#                 continue
+
+#             transcription_start_time = time.perf_counter()
+
+#             self.latest_transcribed_text = self.transcriber.transcribe(speech_chunks)
+
+#             self.time_taken_to_transcribe = time.perf_counter() - transcription_start_time
+
+#             # self.full_sentences.append(transcribed_text)
+#             self.state_changed_event.set()
+
+class Recorder():
+
+    NUM_CHANNELS=1
+    SAMPLE_RATE=16000
+    CHUNK_SIZE = 512 # num frames per buffer
+
+    CHUNKS_PER_SECOND = SAMPLE_RATE / CHUNK_SIZE
+    SECONDS_PER_CHUNK = CHUNK_SIZE / SAMPLE_RATE
+
+    PRE_AUDIO_CHUNK_BUFFER_DURATION = 0.3 # store 0.3 seconds of chunks
+    PRE_AUDIO_CHUNK_BUFFER_SIZE = int(PRE_AUDIO_CHUNK_BUFFER_DURATION * CHUNKS_PER_SECOND) # max num chunks
+
+    SPEECH_PROB_THRESHOLD = 0.5
+    FINISHED_SPEAKING_TIMEOUT_DURATION = 1.0 # time to wait after speaking first not detected, in seconds
+
+    def __init__(self):
+
+        self.transcriber_device = "cuda" if torch.cuda.is_available() else "cpu"
+        # self.vad_device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.vad_device = "cpu"
+
+        self.silero_vad_model: torch.nn.Module = load_silero_vad()
+        self.silero_vad_model.to(self.vad_device)
+
+        # when we first detect speech, it's only after a few ms of speech is said, and we need to add that to the buffer
+        self.pre_audio_chunks_rolling_buffer: collections.deque[bytes] = collections.deque(maxlen=self.PRE_AUDIO_CHUNK_BUFFER_SIZE) # rolling buffer of frame chunks
+
+        # chunks with speech with the pre-audio chunks appended to the front
+        self.speech_chunks: list[bytes] = []
+
+        self.audio_queue: queue.Queue = queue.Queue()
+        self.transcription_queue: queue.Queue = queue.Queue() # queue of audio to be transcribed
+
+        print("loading transcriber...")
+        self.transcriber = Transcriber(device=self.transcriber_device)
+        print("done loading transcriber")
+
+        self.transcribed_text_in_progress = ""
+        self.pre_transcribed_text_in_progress = ""
+        self.displayed_text = ""
+        self.full_sentences = []
+        # self.ready_to_submit_final_transcription = False
+
+        self.time_start = time.time()
+        self.time_vad_detects_speech_stop = time.time()
+        self.time_since_vad_stopped_detecting_speech = time.time()
+        self.time_taken_to_transcribe = 0.0
+        self.time_taken_to_detect_voice = 0.0
+
+        self.vad_detects_speech_previous = False
+        self.vad_detects_speech = False
+
+        self.vad_detects_speech_start = False
+        self.vad_detects_speech_stop = False
+
+        self.is_speaking = False
+
+        self.speech_confidence: float = 0.0
+        self.boundary_detected: bool = False
+
+        self.audio = pyaudio.PyAudio()
+
+        self.vad_thread = threading.Thread(target=self._vad_worker, daemon=True)
+        self.vad_thread.start()
+
+        self.transcription_thread = threading.Thread(target=self._transcription_worker, daemon=True)
+        self.transcription_thread.start()
+
+        self.state_changed_event = threading.Event()
+
+        self.stream = self.audio.open(
+            format=pyaudio.paInt16,
+            channels=self.NUM_CHANNELS,
+            rate=self.SAMPLE_RATE,
+            input=True,
+            frames_per_buffer=self.CHUNK_SIZE,
+            stream_callback=self._on_new_audio_chunk_callback,
+        )
+    
+    def __del__(self):
+        self.stream.close()
+        self.audio.terminate()
+    
+    def record(self, timeout=SECONDS_PER_CHUNK):
+        self.state_changed_event.wait(timeout=timeout)
+        self.state_changed_event.clear()
+
+    def _on_new_audio_chunk_callback(self, audio_chunk: bytes, frame_count: int, time_info: dict, status: int) -> tuple:
+        self.audio_queue.put(audio_chunk)
+        return (None, pyaudio.paContinue)
+
+    def _transcription_worker(self):
+        while True:
+            try:
+                speech_chunks = self.transcription_queue.get(timeout=0.05)
+            except queue.Empty:
+                continue
+
+            transcription_start_time = time.perf_counter()
+
+            transcribed_text = self.transcriber.transcribe(speech_chunks)
+
+            self.time_taken_to_transcribe = time.perf_counter() - transcription_start_time
+
+            self.full_sentences.append(transcribed_text)
+            self.state_changed_event.set()
+    
+    def _send_transcription_request(self, chunks_to_transcribe):
+        self.transcription_queue.put(chunks_to_transcribe)
+
+    def _vad_worker(self):
+
+        while True:
+
+            if (self.audio_queue.qsize() > 50):
+                raise RuntimeError("audio queue got too big, either hardware is too slow or I am bad at coding")
+
+            try:
+                audio_chunk = self.audio_queue.get_nowait()
+            except queue.Empty:
+                continue
+
+            if not self.is_speaking:
+                self.pre_audio_chunks_rolling_buffer.append(audio_chunk)
+
+            if self.is_speaking:
+                self.speech_chunks.append(audio_chunk)
+
+            vad_start_time = time.perf_counter()
+
+            audio_chunk_float32: np.ndarray = int16_bytes_to_normalized_float32_ndarray(audio_chunk)
+
+            audio_tensor = torch.from_numpy(audio_chunk_float32).to(self.vad_device)
+            self.speech_confidence = self.silero_vad_model(audio_tensor, self.SAMPLE_RATE).item()
+            # time.sleep(0.05) # <- if it takes too long to detect speech then the queue will grow infinitely
+            # but this is less of a bug and more of a hardware limitation
+
+            self.time_taken_to_detect_voice = time.perf_counter() - vad_start_time
+
+            # rms = audioop.rms(audio_chunk, 2)
+            # progress.update(task_id, completed=rms)
+
+            # TODO: endpointing
+            # https://arunbaby.com/speech-tech/0035-speech-boundary-detection/
+            # see: "What is endpointing and why is a fixed timeout insufficient?"
+            # right now, this code uses a fixed timeout of 1 second
+
+            self.vad_detects_speech = self.speech_confidence > self.SPEECH_PROB_THRESHOLD
+            self.vad_detects_speech_start = self.vad_detects_speech and not self.vad_detects_speech_previous
+            self.vad_detects_speech_stop = not self.vad_detects_speech and self.vad_detects_speech_previous
+            # MAYBE TODO: implement better boundary detection 
+            # so GLADOS can stop talking if someone says "hey glados" or "shut up" or whatever
+            self.boundary_detected = self.vad_detects_speech_stop
+
+
+            if self.vad_detects_speech_start and (not self.is_speaking):
+                self.is_speaking = True
+                self.speech_chunks.extend(self.pre_audio_chunks_rolling_buffer)
+
+                audio_data = sr.AudioData(b"".join(self.pre_audio_chunks_rolling_buffer), sample_rate=self.SAMPLE_RATE, sample_width=2) # 2 for 2 byte, 16 bit ints
+                with open("pre-audio.wav", "wb") as f:
+                    f.write(audio_data.get_wav_data())
+
+                self.pre_audio_chunks_rolling_buffer.clear()
+
+            if self.vad_detects_speech_stop:
+                # falling edge
+                self.time_vad_detects_speech_stop = time.time()
+
+            # if boundary_detected:
+                # pre transcribe
+
+            if (not self.vad_detects_speech) and self.is_speaking:
+                self.time_since_vad_stopped_detecting_speech = time.time() - self.time_vad_detects_speech_stop
+
+                if self.time_since_vad_stopped_detecting_speech > self.FINISHED_SPEAKING_TIMEOUT_DURATION:
+                    self.is_speaking = False
+
+                    completed_speech = list(self.speech_chunks)
+                    self._send_transcription_request(completed_speech)
+                    self.speech_chunks.clear()
+
+                    # print("writing audio data to file")
+                    audio_data = sr.AudioData(b"".join(completed_speech), sample_rate=self.SAMPLE_RATE, sample_width=2) # 2 for 2 byte, 16 bit ints
+                    with open("microphone-results.wav", "wb") as f:
+                        f.write(audio_data.get_wav_data())
+                    # print("done writing audio data to file")
+
+            self.vad_detects_speech_previous = self.vad_detects_speech
+            self.state_changed_event.set()
+
+
 
 progress = Progress(
     TextColumn("[bold blue]Speech Probability:"),
@@ -49,180 +315,62 @@ progress = Progress(
 )
 task_id = progress.add_task("vad", total=100)
 
-audio = pyaudio.PyAudio()
+console = Console()
 
-NUM_CHANNELS=1
-SAMPLE_RATE=16000
-CHUNK_SIZE = 512 # num frames per buffer
-
-CHUNKS_PER_SECOND = SAMPLE_RATE / CHUNK_SIZE
-
-SPEECH_PROB_THRESHOLD = 0.5
-FINISHED_SPEAKING_TIMEOUT_DURATION = 1.0 # time to wait after speaking first not detected, in seconds
-
-stream = audio.open(
-    format=pyaudio.paInt16,
-    channels=NUM_CHANNELS,
-    rate=SAMPLE_RATE,
-    input=True,
-    frames_per_buffer=CHUNK_SIZE,
-)
-
-silero_vad_model = load_silero_vad()
-
-recognizer = sr.Recognizer()
-print("loading faster whisper model...")
-faster_whisper_model = WhisperModel("distil-large-v3", device="cuda", compute_type="float16")
-print("done loading faster whisper model")
-
-# transcribed_text = ""
-pre_transcribed_text = ""
-displayed_text = ""
-full_sentences = []
-
-speech_frames: list[bytes] = []
-
-# when we first detect speech, it's only after a few ms of speech is said, and we need to add that to the buffer
-PRE_AUDIO_FRAME_BUFFER_DURATION = 0.3 # store 0.3 seconds of frames
-PRE_AUDIO_FRAME_BUFFER_SIZE = int(PRE_AUDIO_FRAME_BUFFER_DURATION * CHUNKS_PER_SECOND) # max num chunks
-pre_audio_frames_rolling_buffer: collections.deque[bytes] = collections.deque(maxlen=PRE_AUDIO_FRAME_BUFFER_SIZE) # rolling buffer of frame chunks
-
-start = time.time()
-current_time = start
-time_vad_detects_speech_stop = start
-time_since_vad_stopped_detecting_speech = start
-time_taken_to_transcribe = 0.0
-
-vad_detects_speech_previous = False
-vad_detects_speech = False
-
-vad_detects_speech_start = False
-vad_detects_speech_stop = False
-
-is_speaking = False
+recorder = Recorder()
 
 print("Listening...")
 
-console = Console()
-
 with Live(console=console, refresh_per_second=60) as live:
-    while True:
-        current_time = time.time()
+    try:
+        while True:
 
-        frame: bytes = stream.read(CHUNK_SIZE)
+            before_record = time.perf_counter()
+            recorder.record()
+            time_taken_to_record = time.perf_counter() - before_record
 
-        frame_float32: np.ndarray = int16_bytes_to_normalized_float32_ndarray(frame)
+            # DISPLAYING STUFF TO CONSOLE
 
-        speech_confidence: float = silero_vad_model(torch.tensor(frame_float32), SAMPLE_RATE).item()
-        # confidences.append(speech_confidence)
+            progress.update(task_id, completed=recorder.speech_confidence * 100)
 
-        progress.update(task_id, completed=speech_confidence * 100)
-        # rms = audioop.rms(frame, 2)
-        # progress.update(task_id, completed=rms)
+            rich_text = Text()
+            for i, sentence in enumerate(recorder.full_sentences):
+                if i % 2 == 0:
+                    #rich_text += Text(sentence, style="bold yellow") + Text(" ")
+                    rich_text += Text(sentence, style="yellow") + Text(" ")
+                else:
+                    rich_text += Text(sentence, style="cyan") + Text(" ")
 
-        # TODO: endpointing
-        # https://arunbaby.com/speech-tech/0035-speech-boundary-detection/
-        # see: "What is endpointing and why is a fixed timeout insufficient?"
-        # right now, this code uses a fixed timeout of 1 second
+            # new_displayed_text = rich_text.plain
 
-        # VAD DETECTION LOGIC
+            # if new_displayed_text != displayed_text:
+            #     displayed_text = new_displayed_text
+                # panel = Panel(rich_text, title="[bold green]Live Transcription[/bold green]", border_style="bold green")
+                # live.update(panel)
 
-        # wait 1 seconds after done talking to sets is_vad_activated to False
+            """Creates a table combining the bar and the boolean indicator."""
+            table = Table.grid(expand=True)
+            table.add_column()
+            table.add_column(justify="right")
 
-        vad_detects_speech = speech_confidence > SPEECH_PROB_THRESHOLD
-        vad_detects_speech_start = vad_detects_speech and not vad_detects_speech_previous
-        vad_detects_speech_stop = not vad_detects_speech and vad_detects_speech_previous
-        # MAYBE TODO: implement better boundary detection 
-        # so GLADOS can stop talking if someone says "hey glados" or "shut up" or whatever
-        # boundary_detected = vad_detects_speech_stop
-
-        if is_speaking:
-            speech_frames.append(frame)
-        
-        if not is_speaking:
-            pre_audio_frames_rolling_buffer.append(frame)
-        
-        if vad_detects_speech_start and (not is_speaking):
-            speech_frames.extend(pre_audio_frames_rolling_buffer)
-
-            # audio_data = sr.AudioData(b"".join(pre_audio_frames_rolling_buffer), sample_rate=SAMPLE_RATE, sample_width=2) # 2 for 2 byte, 16 bit ints
-            # with open("pre-audio.wav", "wb") as f:
-            #     f.write(audio_data.get_wav_data())
-
-            pre_audio_frames_rolling_buffer.clear()
-
-        if vad_detects_speech_start:
-            is_speaking = True
-
-        if vad_detects_speech_stop:
-            # falling edge
-            time_vad_detects_speech_stop = current_time
-
-        time_since_vad_stopped_detecting_speech = current_time - time_vad_detects_speech_stop
-
-        if is_speaking and (not vad_detects_speech) and time_since_vad_stopped_detecting_speech > FINISHED_SPEAKING_TIMEOUT_DURATION:
-            is_speaking = False
-
-            audio_data = sr.AudioData(b"".join(speech_frames), sample_rate=SAMPLE_RATE, sample_width=2) # 2 for 2 byte, 16 bit ints
-            with open("microphone-results.wav", "wb") as f:
-                f.write(audio_data.get_wav_data())
-
-            transcription_start_time = time.perf_counter()
-
-            speech_frames_float32: np.ndarray = int16_byte_list_to_normalized_float32_ndarray(speech_frames)
-            segments, info = faster_whisper_model.transcribe(speech_frames_float32, language="en", condition_on_previous_text=True)
-            for segment in segments:
-                full_sentences.append(segment.text)
-
-            # text = recognizer.recognize_faster_whisper(audio_data, language="en")
-            # full_sentences.append(text)
-
-            time_taken_to_transcribe = time.perf_counter() - transcription_start_time
-
-
-            speech_frames.clear()
-
-
-        # END VAD DETECTION LOGIC
-
-        # DISPLAYING STUFF TO CONSOLE
-
-        rich_text = Text()
-        for i, sentence in enumerate(full_sentences):
-            if i % 2 == 0:
-                #rich_text += Text(sentence, style="bold yellow") + Text(" ")
-                rich_text += Text(sentence, style="yellow") + Text(" ")
+            # Format the boolean status indicator
+            if recorder.is_speaking:
+                status = "[bold white on green]  SPEAKING  [/bold white on green]"
             else:
-                rich_text += Text(sentence, style="cyan") + Text(" ")
+                status = "[bold white on dim red]  SILENT    [/bold white on dim red]"
 
-        # new_displayed_text = rich_text.plain
+            table.add_row(progress, status)
+            table.add_row(Text(f"size of buffer: {len(recorder.pre_audio_chunks_rolling_buffer)}"))
+            table.add_row(Text(f"time taken to transcribe: {recorder.time_taken_to_transcribe}"))
+            table.add_row(Text(f"time taken to detect voice: {recorder.time_taken_to_detect_voice}"))
+            table.add_row(Text(f"time taken to record: {time_taken_to_record}"))
+            table.add_row(Text(f"size of queue: {recorder.audio_queue.qsize()}"))
+            # table.add_row(Text(f"time since detected speech stop: {time_since_vad_stopped_detecting_speech}"))
+            table.add_row(rich_text)
+            panel = Panel(table, title="[bold]Live VAD Monitor[/bold]", border_style="blue")
+            live.update(panel)
 
-        # if new_displayed_text != displayed_text:
-        #     displayed_text = new_displayed_text
-            # panel = Panel(rich_text, title="[bold green]Live Transcription[/bold green]", border_style="bold green")
-            # live.update(panel)
-
-        """Creates a table combining the bar and the boolean indicator."""
-        table = Table.grid(expand=True)
-        table.add_column()
-        table.add_column(justify="right")
-
-        # Format the boolean status indicator
-        if is_speaking:
-            status = "[bold white on green]  SPEAKING  [/bold white on green]"
-        else:
-            status = "[bold white on dim red]  SILENT    [/bold white on dim red]"
-
-        table.add_row(progress, status)
-        table.add_row(Text(f"size of buffer: {len(pre_audio_frames_rolling_buffer)}"))
-        table.add_row(Text(f"time taken to transcribe: {time_taken_to_transcribe}"))
-        # table.add_row(Text(f"time since detected speech stop: {time_since_vad_stopped_detecting_speech}"))
-        table.add_row(rich_text)
-        panel = Panel(table, title="[bold]Live VAD Monitor[/bold]", border_style="blue")
-        live.update(panel)
-
-        # END DISPLAYING STUFF TO CONSOLE
-
-        vad_detects_speech_previous = vad_detects_speech
-
-
+            # END DISPLAYING STUFF TO CONSOLE
+    except Exception as e:
+        print(e)
+        exit(1)
