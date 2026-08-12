@@ -46,6 +46,24 @@ def int16_bytes_list_to_normalized_float32_ndarray(int16_bytes_list: list[bytes]
 def round_to_nearest(n, m):
     return (n + m - 1) // m * m
 
+def preprocess_text(text: str) -> str:
+    # ripped from https://github.com/KoljaB/RealtimeSTT/blob/master/tests/realtimestt_test.py
+    # Remove leading whitespaces
+    text = text.lstrip()
+
+    #  Remove starting ellipses if present
+    if text.startswith("..."):
+        text = text[3:]
+
+    # Remove any leading whitespaces again after ellipses removal
+    text = text.lstrip()
+
+    # Uppercase the first letter
+    if text:
+        text = text[0].upper() + text[1:]
+    
+    return text
+
 class Transcriber():
 
     def __init__(self, device):
@@ -53,8 +71,12 @@ class Transcriber():
         device: either "cuda" or "cpu"
         """
 
+        self.device = device
+
+        self.compute_type = "float16" if self.device == "cuda" else "int8"
+
         # super accurate but kinda slow
-        self.faster_whisper_model = WhisperModel("distil-large-v3", device=device, compute_type="float16")
+        self.faster_whisper_model = WhisperModel("distil-large-v3", device=self.device, compute_type=self.compute_type)
 
         # pretty accurate and about 4-5 times faster
         # self.faster_whisper_model = WhisperModel("distil-small.en", device="cuda", compute_type="float16")
@@ -79,7 +101,9 @@ class TranscriptionWorker():
         device: either "cuda" or "cpu"
         """
         self.transcriber = transcriber
-        self.audio_to_transcribe_queue: queue.Queue = queue.Queue() # queue of audio to be transcribed
+
+        # queue of audio to be transcribed
+        self.audio_to_transcribe_queue: queue.Queue = queue.Queue()
 
         # may be multiple sentences
         self.latest_transcribed_text = ""
@@ -128,11 +152,11 @@ class Recorder():
     PRE_AUDIO_CHUNK_BUFFER_SIZE = int(PRE_AUDIO_CHUNK_BUFFER_DURATION * CHUNKS_PER_SECOND) # max num chunks
 
     SPEECH_PROB_THRESHOLD = 0.5
-    FINISHED_SPEAKING_TIMEOUT_DURATION = 1.0 # time to wait after speaking first not detected, in seconds
 
     def __init__(self):
 
         self.transcriber_device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"transcriber device: {self.transcriber_device}")
         # self.vad_device = "cuda" if torch.cuda.is_available() else "cpu"
         self.vad_device = "cpu"
 
@@ -163,8 +187,11 @@ class Recorder():
 
         self.time_start = time.time()
         self.time_vad_detects_speech_stop = time.time()
-        self.time_since_vad_stopped_detecting_speech = time.time()
+        self.time_vad_first_detects_speech = 0.0
+        self.time_submitted_transcription_request = 0.0
+        # self.time_since_vad_stopped_detecting_speech = time.time()
         self.time_taken_to_detect_voice = 0.0
+        self.post_speech_silence_duration = 1.0 # time to wait after speaking first not detected, in seconds
 
         self.vad_detects_speech_previous = False
         self.vad_detects_speech = False
@@ -214,7 +241,7 @@ class Recorder():
         while True:
 
             if (self.audio_queue.qsize() > 50):
-                raise RuntimeError("audio queue got too big, either hardware is too slow or I am bad at coding")
+                raise Exception("audio queue got too big, either hardware is too slow or I am bad at coding")
 
             try:
                 audio_chunk = self.audio_queue.get_nowait()
@@ -249,13 +276,10 @@ class Recorder():
             self.vad_detects_speech = self.speech_confidence > self.SPEECH_PROB_THRESHOLD
             self.vad_detects_speech_start = self.vad_detects_speech and not self.vad_detects_speech_previous
             self.vad_detects_speech_stop = not self.vad_detects_speech and self.vad_detects_speech_previous
-            # MAYBE TODO: implement better boundary detection 
-            # so GLADOS can stop talking if someone says "hey glados" or "shut up" or whatever
-            self.boundary_detected = self.vad_detects_speech_stop
-
 
             if self.vad_detects_speech_start and (not self.is_speaking):
                 self.is_speaking = True
+                self.time_vad_first_detects_speech = time.time()
                 self.speech_chunks.extend(self.pre_audio_chunks_rolling_buffer)
 
                 audio_data = sr.AudioData(b"".join(self.pre_audio_chunks_rolling_buffer), sample_rate=self.SAMPLE_RATE, sample_width=2) # 2 for 2 byte, 16 bit ints
@@ -264,21 +288,38 @@ class Recorder():
 
                 self.pre_audio_chunks_rolling_buffer.clear()
 
+            # MAYBE TODO: implement better boundary detection 
+            # so GLADOS can stop talking if someone says "hey glados" or "shut up" or whatever
+            self.boundary_detected = (
+                self.vad_detects_speech_stop
+                or
+                (
+                    # self.is_speaking
+                    self.vad_detects_speech
+                    and time.time() - self.time_vad_first_detects_speech > 1.0 
+                    and time.time() - self.time_submitted_transcription_request > 1.0
+                )
+             )
+
             if self.vad_detects_speech_stop:
                 # falling edge
                 self.time_vad_detects_speech_stop = time.time()
-
-            # if boundary_detected:
-                # pre transcribe
+            
+            if self.boundary_detected:
+                # pre submit transcription request
+                print("pre submitting transcription request")
+                self._submit_transcription_request(list(self.speech_chunks))
+                self.time_submitted_transcription_request = time.time()
 
             if (not self.vad_detects_speech) and self.is_speaking:
-                self.time_since_vad_stopped_detecting_speech = time.time() - self.time_vad_detects_speech_stop
+                time_since_vad_stopped_detecting_speech = time.time() - self.time_vad_detects_speech_stop
 
-                if self.time_since_vad_stopped_detecting_speech > self.FINISHED_SPEAKING_TIMEOUT_DURATION:
+                if time_since_vad_stopped_detecting_speech > self.post_speech_silence_duration:
                     self.is_speaking = False
 
                     completed_speech = list(self.speech_chunks)
-                    self._submit_transcription_request(completed_speech)
+                    # print("submitting final transcription request")
+                    # self._submit_transcription_request(completed_speech)
                     self.speech_chunks.clear()
 
                     # print("writing audio data to file")
@@ -300,7 +341,7 @@ task_id = progress.add_task("vad", total=100)
 
 console = Console()
 
-previous_transcribed_text = ""
+pre_transcribed_text = ""
 full_sentences: list[str] = []
 
 recorder = Recorder()
@@ -315,9 +356,27 @@ with Live(console=console, refresh_per_second=60) as live:
             recorder.record()
             time_taken_to_record = time.perf_counter() - before_record
 
+            new_transcribed_text = recorder.get_latest_transcribed_text()
+            new_transcribed_text = preprocess_text(new_transcribed_text)
+
+            pre_transcribed_text = ""
+
+            if new_transcribed_text and (
+                not full_sentences \
+                or (full_sentences and new_transcribed_text != full_sentences[-1])
+            ):
+                # set pre_transcribed_text if the latest transcribed text is not the final transcription
+                if recorder.is_speaking:
+                    pre_transcribed_text = new_transcribed_text
+
+                # if the latest transcribed text is from a finished sentence, then add it to full_sentences
+                if not recorder.is_speaking:
+
+                    # add new full sentence
+                    full_sentences.append(new_transcribed_text)
+
             # DISPLAYING STUFF TO CONSOLE
 
-            progress.update(task_id, completed=recorder.speech_confidence * 100)
 
             transcribed_rich_text = Text()
 
@@ -328,12 +387,7 @@ with Live(console=console, refresh_per_second=60) as live:
                 else:
                     transcribed_rich_text += Text(sentence, style="cyan") + Text(" ")
 
-            new_transcribed_text = recorder.get_latest_transcribed_text()
-
-            if new_transcribed_text != previous_transcribed_text:
-                full_sentences.append(new_transcribed_text)
-                previous_transcribed_text = new_transcribed_text
-
+            transcribed_rich_text += Text(pre_transcribed_text, style="bold bright_red") + Text(" ")
 
             """Creates a table combining the bar and the boolean indicator."""
             table = Table.grid(expand=True)
@@ -346,12 +400,15 @@ with Live(console=console, refresh_per_second=60) as live:
             else:
                 status = "[bold white on dim red]  SILENT    [/bold white on dim red]"
 
+            progress.update(task_id, completed=recorder.speech_confidence * 100)
             table.add_row(progress, status)
+
             table.add_row(Text(f"size of buffer: {len(recorder.pre_audio_chunks_rolling_buffer)}"))
             table.add_row(Text(f"time taken to transcribe: {recorder.transcription_worker.time_taken_to_transcribe}"))
             table.add_row(Text(f"time taken to detect voice: {recorder.time_taken_to_detect_voice}"))
             table.add_row(Text(f"time taken to record: {time_taken_to_record}"))
-            table.add_row(Text(f"size of queue: {recorder.audio_queue.qsize()}"))
+            table.add_row(Text(f"size of pre-audio queue: {recorder.audio_queue.qsize()}"))
+            table.add_row(Text(f"size of transcription queue: {recorder.transcription_worker.audio_to_transcribe_queue.qsize()}"))
             # table.add_row(Text(f"time since detected speech stop: {time_since_vad_stopped_detecting_speech}"))
             table.add_row(transcribed_rich_text)
             panel = Panel(table, title="[bold]Live VAD Monitor[/bold]", border_style="blue")

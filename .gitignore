@@ -88,3 +88,7 @@ benchmark/results/
 # Local scratch
 tmp/
 scratch/
+
+# user
+microphone-results.wav
+pre-audio.wav
