@@ -42,7 +42,6 @@ def int16_bytes_to_normalized_float32_ndarray(int16_bytes: bytes) -> np.ndarray:
 def int16_bytes_list_to_normalized_float32_ndarray(int16_bytes_list: list[bytes]) -> np.ndarray:
     return int16_bytes_to_normalized_float32_ndarray(b"".join(int16_bytes_list))
 
-
 def round_to_nearest(n, m):
     return (n + m - 1) // m * m
 
@@ -66,7 +65,12 @@ def preprocess_text(text: str) -> str:
 
 class Transcriber():
 
-    def __init__(self, device):
+    def __init__(
+        self,
+        device: str,
+        model_type: str,
+        language=None,
+    ):
         """
         device: either "cuda" or "cpu"
         """
@@ -75,11 +79,11 @@ class Transcriber():
 
         self.compute_type = "float16" if self.device == "cuda" else "int8"
 
-        # distil-small is less accurate but around 3x faster
-        self.model_size = "distil-large-v3" if self.device == "cuda" else "distil-small.en"
-        # self.model_size = "distil-large-v3" if self.device == "cuda" else "distil-large-v3"
+        self.model_type = model_type
 
-        self.faster_whisper_model = WhisperModel(self.model_size, device=self.device, compute_type=self.compute_type)
+        self.language = language
+
+        self.faster_whisper_model = WhisperModel(self.model_type, device=self.device, compute_type=self.compute_type)
 
         # pretty accurate and about 4-5 times faster
         # self.faster_whisper_model = WhisperModel("distil-small.en", device="cuda", compute_type="float16")
@@ -90,8 +94,9 @@ class Transcriber():
         transcribed_text = ""
 
         speech_chunks_float32: np.ndarray = int16_bytes_list_to_normalized_float32_ndarray(speech_chunks)
-        # segments, info = self.faster_whisper_model.transcribe(speech_chunks_float32, language="en", condition_on_previous_text=True)
-        segments, info = self.faster_whisper_model.transcribe(speech_chunks_float32, language="en", condition_on_previous_text=False)
+        # segments, info = self.faster_whisper_model.transcribe(speech_chunks_float32, language=self.language, condition_on_previous_text=True)
+        segments, info = self.faster_whisper_model.transcribe(speech_chunks_float32, language=self.language, condition_on_previous_text=False)
+
         for segment in segments:
             transcribed_text += segment.text
         return transcribed_text
@@ -99,7 +104,13 @@ class Transcriber():
         # return recognizer.recognize_faster_whisper(audio_data, language="en")
 
 class TranscriptionWorker():
-    def __init__(self, state_changed_event: threading.Event, transcriber: Transcriber, device, on_transcription_update_callback):
+    def __init__(
+        self,
+        state_changed_event: threading.Event,
+        transcriber: Transcriber,
+        device,
+        on_transcription_update_callback,
+    ):
         """
         device: either "cuda" or "cpu"
         """
@@ -131,8 +142,7 @@ class TranscriptionWorker():
     def stop(self):
         self._stop_event.set()
         self.thread.join(timeout=1.0)
-
-
+    
     def _worker(self):
         while True:
             try:
@@ -140,7 +150,7 @@ class TranscriptionWorker():
             except queue.Empty:
                 continue
 
-            transcription_start_time = time.perf_counter()
+            transcription_start_time = time.time()
 
             self.is_busy = True
 
@@ -148,7 +158,7 @@ class TranscriptionWorker():
 
             self.is_busy = False
 
-            self.time_taken_to_transcribe = time.perf_counter() - transcription_start_time
+            self.time_taken_to_transcribe = time.time() - transcription_start_time
 
             threading.Thread(
                 target=self.on_transcription_update_callback,
@@ -171,7 +181,20 @@ class Recorder():
 
     SPEECH_PROB_THRESHOLD = 0.5
 
-    def __init__(self, transcriber_device: str, vad_device: str, on_transcription_update_callback):
+    def __init__(
+        self,
+        transcriber_device: str,
+        vad_device: str,
+        on_transcription_update_callback,
+        on_realtime_transcription_update_callback,
+        transcriber_model_type="distil-large-v3",
+        realtime_transcriber_model_type="tiny",
+        enable_realtime_transcription=True,
+        language=None
+    ):
+
+        self.enable_realtime_transcription = enable_realtime_transcription
+        self.language = language
 
         self.transcriber_device = transcriber_device
         self.vad_device = vad_device
@@ -192,9 +215,10 @@ class Recorder():
         self.state_changed_event = threading.Event()
 
         self.on_transcription_update_callback = on_transcription_update_callback
+        self.on_realtime_transcription_update_callback = on_realtime_transcription_update_callback
 
         print("loading transcriber...")
-        self.transcriber = Transcriber(device=self.transcriber_device)
+        self.transcriber = Transcriber(device=self.transcriber_device, model_type=transcriber_model_type, language=self.language)
         print("done loading transcriber")
 
         self.transcription_worker = TranscriptionWorker(
@@ -204,10 +228,23 @@ class Recorder():
             on_transcription_update_callback=self.on_transcription_update_callback
         )
 
+        if self.enable_realtime_transcription:
+            print("loading realtime transcriber...")
+            self.realtime_transcriber = Transcriber(device=self.transcriber_device, model_type=realtime_transcriber_model_type, language=self.language)
+            print("done loading realtime transcriber")
+
+            self.realtime_transcription_worker = TranscriptionWorker(
+                state_changed_event=self.state_changed_event,
+                transcriber=self.realtime_transcriber,
+                device=self.transcriber_device,
+                on_transcription_update_callback=self.on_realtime_transcription_update_callback
+            )
+
         self.time_start = time.time()
-        self.time_vad_detects_speech_stop = time.time()
+        self.time_vad_detects_speech_stop = 0.0
         self.time_vad_first_detects_speech = 0.0
         self.time_submitted_transcription_request = 0.0
+        self.time_submitted_realtime_transcription_request = 0.0
         # self.silence_duration = time.time()
         self.time_taken_to_detect_voice = 0.0
         self.post_speech_silence_duration = 1.0 # time to wait after speaking first not detected, in seconds
@@ -251,7 +288,12 @@ class Recorder():
 
     def _submit_transcription_request(self, chunks_to_transcribe: list[bytes]):
         self.transcription_worker.submit_transcription_request(chunks_to_transcribe)
+        self.time_submitted_transcription_request = time.time()
 
+    def _submit_realtime_transcription_request(self, chunks_to_transcribe: list[bytes]):
+        self.realtime_transcription_worker.submit_transcription_request(chunks_to_transcribe)
+        self.time_submitted_realtime_transcription_request = time.time()
+    
     def _vad_worker(self):
 
         while True:
@@ -270,7 +312,7 @@ class Recorder():
             if self.is_speaking:
                 self.speech_chunks.append(audio_chunk)
 
-            vad_start_time = time.perf_counter()
+            vad_start_time = time.time()
 
             audio_chunk_float32: np.ndarray = int16_bytes_to_normalized_float32_ndarray(audio_chunk)
 
@@ -279,7 +321,7 @@ class Recorder():
             # time.sleep(0.05) # <- if it takes too long to detect speech then the queue will grow infinitely
             # but this is less of a bug and more of a hardware limitation
 
-            self.time_taken_to_detect_voice = time.perf_counter() - vad_start_time
+            self.time_taken_to_detect_voice = time.time() - vad_start_time
 
             # rms = audioop.rms(audio_chunk, 2)
             # progress.update(task_id, completed=rms)
@@ -296,6 +338,7 @@ class Recorder():
             if self.vad_detects_speech_start and (not self.is_speaking):
                 self.is_speaking = True
                 self.time_vad_first_detects_speech = time.time()
+
                 self.speech_chunks.extend(self.pre_audio_chunks_rolling_buffer)
 
                 audio_data = sr.AudioData(b"".join(self.pre_audio_chunks_rolling_buffer), sample_rate=self.SAMPLE_RATE, sample_width=2) # 2 for 2 byte, 16 bit ints
@@ -308,19 +351,22 @@ class Recorder():
                 # falling edge
                 self.time_vad_detects_speech_stop = time.time()
 
-            # seconds_of_speech_stored = len(self.speech_chunks) * self.SECONDS_PER_CHUNK
+            seconds_of_speech_stored = len(self.speech_chunks) * self.SECONDS_PER_CHUNK
             
-            # # submit pre transcription only when the transcription worker is not already transcribing something
-            # if self.vad_detects_speech and seconds_of_speech_stored > 1.0 and not self.transcription_worker.is_busy:
-            #     # pre submit transcription request
-            #     print("submitting pre-transcription request")
-            #     self._submit_transcription_request(list(self.speech_chunks))
-            #     self.time_submitted_transcription_request = time.time()
+            if self.enable_realtime_transcription:
+                # submit realtime transcription only when the realtime transcription worker is not already transcribing something
+                if self.vad_detects_speech and seconds_of_speech_stored > 1.0 and not self.realtime_transcription_worker.is_busy:
+                    self._submit_realtime_transcription_request(self.speech_chunks)
+
+            # time_since_last_submitted_transcription_request = time.time() - self.time_submitted_transcription_request
             
-            # if self.vad_detects_speech_stop:
-            #     print("submitting final transcription request")
-            #     self._submit_transcription_request(list(self.speech_chunks))
-            #     self.time_submitted_transcription_request = time.time()
+            # if self.vad_detects_speech_stop \
+            #     and time_since_last_submitted_transcription_request > 0.1:
+            #     # and seconds_of_speech_stored > 0.5:
+
+            #     # print("submitting final transcription request")
+            #     print("submitting")
+            #     self._submit_transcription_request(self.speech_chunks)
 
             if (not self.vad_detects_speech) and self.is_speaking:
 
@@ -329,9 +375,8 @@ class Recorder():
                 if elapsed_silence > self.post_speech_silence_duration:
                     self.is_speaking = False
 
-                    print("submitting final transcription request")
+                    # print("submitting final transcription request")
                     self._submit_transcription_request(self.speech_chunks)
-                    self.time_submitted_transcription_request = time.time()
 
                     # print("writing audio data to file")
                     audio_data = sr.AudioData(b"".join(self.speech_chunks), sample_rate=self.SAMPLE_RATE, sample_width=2) # 2 for 2 byte, 16 bit ints
@@ -345,13 +390,19 @@ class Recorder():
             self.state_changed_event.set()
 
 
-transcribed_text = ""
+# transcribed_text = ""
+realtime_transcribed_text = ""
 
 def on_transcription_update(transcribed_text_output: str):
-    transcribed_text = transcribed_text_output
-    transcribed_text = preprocess_text(transcribed_text)
-    full_sentences.append(transcribed_text)
+    global realtime_transcribed_text
 
+    transcribed_text = preprocess_text(transcribed_text_output)
+    full_sentences.append(transcribed_text)
+    realtime_transcribed_text = ""
+
+def on_realtime_transcription_update(realtime_transcribed_text_output: str):
+    global realtime_transcribed_text
+    realtime_transcribed_text = preprocess_text(realtime_transcribed_text_output)
 
 progress = Progress(
     TextColumn("[bold blue]Speech Probability:"),
@@ -361,22 +412,34 @@ task_id = progress.add_task("vad", total=100)
 
 console = Console()
 
-pre_transcribed_text = ""
 full_sentences: list[str] = []
 
-# transcriber_device = "cuda" if torch.cuda.is_available() else "cpu"
-# vad_device = "cuda" if torch.cuda.is_available() else "cpu"
+transcriber_device = "cuda" if torch.cuda.is_available() else "cpu"
+vad_device = "cuda" if torch.cuda.is_available() else "cpu"
 
-transcriber_device = "cpu"
-vad_device = "cpu"
+# transcriber_device = "cpu"
+# vad_device = "cpu"
 
 print(f"transcriber device: {transcriber_device}")
 print(f"vad device: {vad_device}")
 
+# distil-small is less accurate but around 3x faster
+# model_type = "distil-large-v3" if self.device == "cuda" else "distil-small.en"
+# model_type = "distil-medium.en"
+model_type = "distil-large-v3"
+
+realtime_model_type = "distil-small.en"
+
 recorder = Recorder(
     transcriber_device=transcriber_device,
     vad_device=vad_device,
+    language="en",
+    enable_realtime_transcription=True,
+    # enable_realtime_transcription=False,
+    transcriber_model_type=model_type,
     on_transcription_update_callback=on_transcription_update,
+    realtime_transcriber_model_type=realtime_model_type,
+    on_realtime_transcription_update_callback=on_realtime_transcription_update,
 )
 
 print("Listening...")
@@ -385,9 +448,9 @@ with Live(console=console, refresh_per_second=60) as live:
     try:
         while True:
 
-            before_record = time.perf_counter()
+            before_record = time.time()
             recorder.record()
-            time_taken_to_record = time.perf_counter() - before_record
+            time_taken_to_record = time.time() - before_record
 
             # DISPLAYING STUFF TO CONSOLE
 
@@ -400,7 +463,7 @@ with Live(console=console, refresh_per_second=60) as live:
                 else:
                     transcribed_rich_text += Text(sentence, style="cyan") + Text(" ")
 
-            transcribed_rich_text += Text(pre_transcribed_text, style="bold bright_red") + Text(" ")
+            transcribed_rich_text += Text(realtime_transcribed_text, style="bold bright_red") + Text(" ")
 
             """Creates a table combining the bar and the boolean indicator."""
             table = Table.grid(expand=True)
@@ -413,15 +476,21 @@ with Live(console=console, refresh_per_second=60) as live:
             else:
                 status = "[bold white on dim red]  SILENT    [/bold white on dim red]"
 
+            if recorder.transcription_worker.is_busy:
+                transcribing_status = "[bold white on green]  TRANSCRIBING  [/bold white on green]"
+            else:
+                transcribing_status = "[bold white on dim red]  NOT TRANSCRIBING    [/bold white on dim red]"
+
             progress.update(task_id, completed=recorder.speech_confidence * 100)
             table.add_row(progress, status)
 
-            table.add_row(Text(f"size of buffer: {len(recorder.pre_audio_chunks_rolling_buffer)}"))
-            table.add_row(Text(f"time taken to transcribe: {recorder.transcription_worker.time_taken_to_transcribe}"))
-            table.add_row(Text(f"time taken to detect voice: {recorder.time_taken_to_detect_voice}"))
-            table.add_row(Text(f"time taken to record: {time_taken_to_record}"))
+            # table.add_row(Text(f"size of buffer: {len(recorder.pre_audio_chunks_rolling_buffer)}"))
+            table.add_row(Text(f"time taken to transcribe: {recorder.transcription_worker.time_taken_to_transcribe:.3f}"), transcribing_status)
+            table.add_row(Text(f"time taken to realtime transcribe: {recorder.realtime_transcription_worker.time_taken_to_transcribe:.3f}"), transcribing_status)
+            # table.add_row(Text(f"time taken to detect voice: {recorder.time_taken_to_detect_voice:.5f}"))
+            # table.add_row(Text(f"time taken to record: {time_taken_to_record:.3f}"))
             table.add_row(Text(f"size of audio queue: {recorder.audio_queue.qsize()}"))
-            table.add_row(Text(f"size of transcription queue: {recorder.transcription_worker.audio_to_transcribe_queue.qsize()}"))
+            table.add_row(Text(f"size of transcription queue (including currently transcribing): {recorder.transcription_worker.audio_to_transcribe_queue.qsize() + recorder.transcription_worker.is_busy}"))
             # table.add_row(Text(f"time since detected speech stop: {silence_duration}"))
             table.add_row(transcribed_rich_text)
             panel = Panel(table, title="[bold]Live VAD Monitor[/bold]", border_style="blue")
