@@ -19,8 +19,8 @@ class MujocoControl(ControlInterface):
     _INDEX = {
         "main_swivel": 0,
         "lower_arm":   1,
-        "neck":        2,
-        "head":        3,
+        "tilt":        2,
+        "nod":         3,
         "eye":         4,
     }
 
@@ -41,7 +41,7 @@ class MujocoControl(ControlInterface):
         for joint, value in joints.items():
             idx = self._INDEX[joint]
             if joint == "eye":
-                ctrl[idx] = value / 1000.0          # mm → m
+                ctrl[idx] = value / 1000.0           # mm → m
             else:
                 ctrl[idx] = math.radians(value)      # deg → rad
 

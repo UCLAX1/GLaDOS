@@ -13,13 +13,13 @@ class ControlInterface(ABC):
     # ── Joint limits ───────────────────────────────────
     # Rotation joints in degrees, eye in mm.
 
-    JOINTS = ["main_swivel", "lower_arm", "neck", "head", "eye"]
+    JOINTS = ["main_swivel", "lower_arm", "tilt", "nod", "eye"]
 
     LIMITS = {
         "main_swivel": (-180.0, 180.0),   # rad: ±3.14159
-        "lower_arm":   (-60.0,  60.0),    # rad: ±1.047
-        "neck":        (-45.0,  45.0),    # rad: ±0.785
-        "head":        (-57.3,  57.3),    # rad: ±1.0
+        "lower_arm":   (0.0,    85.9),    # rad: 0 to 1.5
+        "tilt":        (-17.2,  17.2),    # rad: ±0.3  (side to side)
+        "nod":         (-34.4,  22.9),    # rad: -0.6 to 0.4  (forward/back)
         "eye":         (-2.0,   2.0),     # m:   ±0.002  (mm here)
     }
 
@@ -36,8 +36,8 @@ class ControlInterface(ABC):
         self,
         main_swivel: float | None = None,
         lower_arm:   float | None = None,
-        neck:        float | None = None,
-        head:        float | None = None,
+        tilt:        float | None = None,
+        nod:         float | None = None,
         eye:         float | None = None,
     ) -> None:
         """
@@ -49,14 +49,14 @@ class ControlInterface(ABC):
         Units: degrees for rotation joints, mm for eye.
 
         Examples:
-            robot.move(neck=-15, head=10)
-            robot.move(main_swivel=90, lower_arm=-30, neck=5, head=-10, eye=1.5)
+            robot.move(tilt=-15, nod=10)
+            robot.move(main_swivel=90, lower_arm=30, tilt=5, nod=-10, eye=1.5)
         """
         updates = {
             "main_swivel": main_swivel,
             "lower_arm":   lower_arm,
-            "neck":        neck,
-            "head":        head,
+            "tilt":        tilt,
+            "nod":         nod,
             "eye":         eye,
         }
         batch = {
