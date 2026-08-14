@@ -110,14 +110,19 @@ class TranscriptionWorker():
         transcriber: Transcriber,
         device,
         on_transcription_update_callback,
+        enable_early_transcription = False,
     ):
         """
         device: either "cuda" or "cpu"
         """
         self.transcriber = transcriber
+        self.enable_early_transcription = enable_early_transcription
 
         # queue of audio to be transcribed
         self.audio_to_transcribe_queue: queue.Queue[list[bytes]] = queue.Queue()
+
+        if self.enable_early_transcription:
+            self.should_keep_queue: queue.Queue[bool] = queue.Queue()
 
         self.on_transcription_update_callback = on_transcription_update_callback
 
@@ -150,6 +155,16 @@ class TranscriptionWorker():
             except queue.Empty:
                 continue
 
+            if self.enable_early_transcription:
+                # --- EARLY TRANSCRIPTION LOGIC --- 
+                initially_awaiting_keep = self.should_keep_queue.empty()
+
+                if not initially_awaiting_keep:
+                    should_keep = self.should_keep_queue.get_nowait()
+                    if not should_keep:
+                        continue
+                # --- END EARLY TRANSCRIPTION LOGIC --- 
+
             transcription_start_time = time.time()
 
             self.is_busy = True
@@ -159,6 +174,17 @@ class TranscriptionWorker():
             self.is_busy = False
 
             self.time_taken_to_transcribe = time.time() - transcription_start_time
+
+            if self.enable_early_transcription:
+                # --- MORE EARLY TRANSCRIPTION LOGIC --- 
+                if initially_awaiting_keep:
+                    try:
+                        should_keep = self.should_keep_queue.get(timeout=4)
+                    except queue.Empty:
+                        raise Exception("FATAL ERROR: Timeout reached, should_keep queue remained empty after transcription completed")
+                    if not should_keep:
+                        continue
+                # --- END MORE EARLY TRANSCRIPTION LOGIC --- 
 
             threading.Thread(
                 target=self.on_transcription_update_callback,
@@ -189,11 +215,13 @@ class Recorder():
         on_realtime_transcription_update_callback,
         transcriber_model_type="distil-large-v3",
         realtime_transcriber_model_type="tiny",
-        enable_realtime_transcription=True,
+        enable_realtime_transcription=False,
+        enable_early_transcription=True,
         language=None
     ):
 
         self.enable_realtime_transcription = enable_realtime_transcription
+        self.enable_early_transcription = enable_early_transcription
         self.language = language
 
         self.transcriber_device = transcriber_device
@@ -225,7 +253,8 @@ class Recorder():
             state_changed_event=self.state_changed_event,
             transcriber=self.transcriber,
             device=self.transcriber_device,
-            on_transcription_update_callback=self.on_transcription_update_callback
+            on_transcription_update_callback=self.on_transcription_update_callback,
+            enable_early_transcription=self.enable_early_transcription,
         )
 
         if self.enable_realtime_transcription:
@@ -237,7 +266,8 @@ class Recorder():
                 state_changed_event=self.state_changed_event,
                 transcriber=self.realtime_transcriber,
                 device=self.transcriber_device,
-                on_transcription_update_callback=self.on_realtime_transcription_update_callback
+                on_transcription_update_callback=self.on_realtime_transcription_update_callback,
+                enable_early_transcription=False,
             )
 
         self.time_start = time.time()
@@ -285,8 +315,18 @@ class Recorder():
     def _on_new_audio_chunk_callback(self, audio_chunk: bytes, frame_count: int, time_info: dict, status: int) -> tuple:
         self.audio_queue.put(audio_chunk)
         return (None, pyaudio.paContinue)
+    
+    def _keep_this_early_transcription(self):
+        self.transcription_worker.should_keep_queue.put(True)
 
-    def _submit_transcription_request(self, chunks_to_transcribe: list[bytes]):
+    def _discard_this_early_transcription(self):
+        self.transcription_worker.should_keep_queue.put(False)
+
+    def _submit_early_transcription_request(self, chunks_to_transcribe: list[bytes]):
+        self.transcription_worker.submit_transcription_request(chunks_to_transcribe)
+        self.time_submitted_transcription_request = time.time()
+
+    def _submit_final_transcription_request(self, chunks_to_transcribe: list[bytes]):
         self.transcription_worker.submit_transcription_request(chunks_to_transcribe)
         self.time_submitted_transcription_request = time.time()
 
@@ -334,6 +374,10 @@ class Recorder():
             self.vad_detects_speech = self.speech_confidence > self.SPEECH_PROB_THRESHOLD
             self.vad_detects_speech_start = self.vad_detects_speech and not self.vad_detects_speech_previous
             self.vad_detects_speech_stop = not self.vad_detects_speech and self.vad_detects_speech_previous
+        
+            if self.enable_early_transcription:
+                if self.vad_detects_speech_start and self.is_speaking:
+                    self._discard_this_early_transcription()
 
             if self.vad_detects_speech_start and (not self.is_speaking):
                 self.is_speaking = True
@@ -357,16 +401,16 @@ class Recorder():
                 # submit realtime transcription only when the realtime transcription worker is not already transcribing something
                 if self.vad_detects_speech and seconds_of_speech_stored > 1.0 and not self.realtime_transcription_worker.is_busy:
                     self._submit_realtime_transcription_request(self.speech_chunks)
-
-            # time_since_last_submitted_transcription_request = time.time() - self.time_submitted_transcription_request
             
-            # if self.vad_detects_speech_stop \
-            #     and time_since_last_submitted_transcription_request > 0.1:
-            #     # and seconds_of_speech_stored > 0.5:
+            if self.enable_early_transcription:
+                time_since_last_submitted_transcription_request = time.time() - self.time_submitted_transcription_request
 
-            #     # print("submitting final transcription request")
-            #     print("submitting")
-            #     self._submit_transcription_request(self.speech_chunks)
+                if self.vad_detects_speech_stop \
+                    and time_since_last_submitted_transcription_request > 0.1:
+                    # and seconds_of_speech_stored > 0.5:
+
+                    # print("submitting early transcription request")
+                    self._submit_early_transcription_request(self.speech_chunks)
 
             if (not self.vad_detects_speech) and self.is_speaking:
 
@@ -375,8 +419,12 @@ class Recorder():
                 if elapsed_silence > self.post_speech_silence_duration:
                     self.is_speaking = False
 
-                    # print("submitting final transcription request")
-                    self._submit_transcription_request(self.speech_chunks)
+                    if self.enable_early_transcription:
+                        self._keep_this_early_transcription()
+
+                    if not self.enable_early_transcription:
+                        # print("submitting final transcription request")
+                        self._submit_final_transcription_request(self.speech_chunks)
 
                     # print("writing audio data to file")
                     audio_data = sr.AudioData(b"".join(self.speech_chunks), sample_rate=self.SAMPLE_RATE, sample_width=2) # 2 for 2 byte, 16 bit ints
@@ -436,6 +484,8 @@ recorder = Recorder(
     language="en",
     enable_realtime_transcription=True,
     # enable_realtime_transcription=False,
+    enable_early_transcription=True,
+    # enable_early_transcription=False,
     transcriber_model_type=model_type,
     on_transcription_update_callback=on_transcription_update,
     realtime_transcriber_model_type=realtime_model_type,
@@ -481,12 +531,17 @@ with Live(console=console, refresh_per_second=60) as live:
             else:
                 transcribing_status = "[bold white on dim red]  NOT TRANSCRIBING    [/bold white on dim red]"
 
+            if recorder.realtime_transcription_worker.is_busy:
+                realtime_transcribing_status = "[bold white on green]  REALTIME TRANSCRIBING  [/bold white on green]"
+            else:
+                realtime_transcribing_status = "[bold white on dim red]  NOT REALTIME TRANSCRIBING    [/bold white on dim red]"
+
             progress.update(task_id, completed=recorder.speech_confidence * 100)
             table.add_row(progress, status)
 
             # table.add_row(Text(f"size of buffer: {len(recorder.pre_audio_chunks_rolling_buffer)}"))
             table.add_row(Text(f"time taken to transcribe: {recorder.transcription_worker.time_taken_to_transcribe:.3f}"), transcribing_status)
-            table.add_row(Text(f"time taken to realtime transcribe: {recorder.realtime_transcription_worker.time_taken_to_transcribe:.3f}"), transcribing_status)
+            table.add_row(Text(f"time taken to realtime transcribe: {recorder.realtime_transcription_worker.time_taken_to_transcribe:.3f}"), realtime_transcribing_status)
             # table.add_row(Text(f"time taken to detect voice: {recorder.time_taken_to_detect_voice:.5f}"))
             # table.add_row(Text(f"time taken to record: {time_taken_to_record:.3f}"))
             table.add_row(Text(f"size of audio queue: {recorder.audio_queue.qsize()}"))

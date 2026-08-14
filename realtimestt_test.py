@@ -1,5 +1,6 @@
 # file from here: 
 # https://github.com/KoljaB/RealtimeSTT/blob/master/tests/realtimestt_test.py
+import time
 
 EXTENDED_LOGGING = False
 
@@ -215,7 +216,9 @@ if __name__ == '__main__':
 
     try:
         while True:
+            start = time.time()
             recorder.text(process_text)
+            print(time.time() - start)
     except KeyboardInterrupt:
         live.stop()
         console.print("[bold red]Transcription stopped by user. Exiting...[/bold red]")
