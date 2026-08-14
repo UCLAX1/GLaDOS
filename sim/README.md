@@ -19,3 +19,11 @@ python3 -m mujoco.viewer --mjcf=model/glados.xml
 ```
 
 Run this from inside the `sim/` folder with the venv active.
+
+## Run demos
+
+Scripts in `demos/` must be run with `mjpython` on macOS (idk weird thing it does):
+
+```bash
+mjpython demos/chaos.py # hehe funny thingy
+```
