@@ -185,7 +185,6 @@ class TranscriptionWorker():
                     if not should_keep:
                         continue
                 # --- END MORE EARLY TRANSCRIPTION LOGIC --- 
-
             threading.Thread(
                 target=self.on_transcription_update_callback,
                 args=(self.latest_transcribed_text,)
@@ -238,7 +237,7 @@ class Recorder():
         # chunks with speech with the pre-audio chunks appended to the front
         self.speech_chunks: list[bytes] = []
 
-        self.audio_queue: queue.Queue = queue.Queue()
+        self.audio_queue: queue.Queue[bytes] = queue.Queue()
 
         self.state_changed_event = threading.Event()
 
@@ -316,6 +315,11 @@ class Recorder():
         self.audio_queue.put(audio_chunk)
         return (None, pyaudio.paContinue)
     
+    def _silero_vad_model(self, audio_chunk: bytes) -> float:
+        audio_chunk_float32: np.ndarray = int16_bytes_to_normalized_float32_ndarray(audio_chunk)
+        audio_tensor = torch.from_numpy(audio_chunk_float32).to(self.vad_device)
+        return self.silero_vad_model(audio_tensor, self.SAMPLE_RATE).item()
+    
     def _keep_this_early_transcription(self):
         self.transcription_worker.should_keep_queue.put(True)
 
@@ -354,17 +358,13 @@ class Recorder():
 
             vad_start_time = time.time()
 
-            audio_chunk_float32: np.ndarray = int16_bytes_to_normalized_float32_ndarray(audio_chunk)
-
-            audio_tensor = torch.from_numpy(audio_chunk_float32).to(self.vad_device)
-            self.speech_confidence = self.silero_vad_model(audio_tensor, self.SAMPLE_RATE).item()
+            self.speech_confidence = self._silero_vad_model(audio_chunk)
             # time.sleep(0.05) # <- if it takes too long to detect speech then the queue will grow infinitely
             # but this is less of a bug and more of a hardware limitation
 
             self.time_taken_to_detect_voice = time.time() - vad_start_time
 
             # rms = audioop.rms(audio_chunk, 2)
-            # progress.update(task_id, completed=rms)
 
             # TODO: endpointing
             # https://arunbaby.com/speech-tech/0035-speech-boundary-detection/
