@@ -1,0 +1,55 @@
+<mujoco model="glados_arm">
+
+  <compiler angle="radian"/>
+   <!-- Draw joint axes/pivots in the viewer -->
+  <visual>
+    <!-- <scale jointlength="0.9" jointwidth="0.9"/> -->
+    <scale jointlength="0.05" jointwidth="0.003"/>
+    <headlight ambient="0.4 0.4 0.4"/>
+  </visual>
+
+  <!-- Physics settings -->
+  <option timestep="0.002" gravity="0 0 -9.81"/>
+
+  <default>
+    <default class="horn">
+      <geom type="box" size="0.0075 0.0075 0.05"  pos="0 0 0.05"/>
+    </default>
+  </default>
+
+  <!-- materials like unity -->
+  <asset>
+    <material name = "body1" rgba = "1 0 0 1" shininess = "0.4" specular = "0.3"/>
+    <material name = "body2" rgba = "0 1 0 1" shininess = "0.4" specular = "0.3"/>
+    <material name = "body3" rgba = "0 0 1 1" shininess = "0.4" specular = "0.3"/>
+    <material name = "body" rgba = "0.1 0.1 0.1 1" shininess = "0.2" specular = "0.2"/>
+    <material name = "horn" rgba = "1 0.5 0 1" shininess = "0.4" specular = "0.3"/>
+  </asset>
+
+    <!-- all the components right here -->
+    <!-- red is body1, green is body2, blue is body3, orange is horn -->
+   <worldbody>
+    <light name="top" pos="0 0 2" dir="0 0 -1" diffuse="0.8 0.8 0.8"/>
+    <geom name="floor" type="plane" size="2 2 0.1" pos="0 0 -5.1" rgba="0.3 0.3 0.3 0.5"/>
+    <!--The Three Server Horn-->
+    <body name="horn1" pos="-0.2165 -0.125 0">
+        <joint name="horn1_joint" type="hinge" axis="0.5 -0.866 0" pos="0 0 0" limited="true" range="-1.57 1.57" damping="15" armature="0.2"/>
+        <geom class="horn" material="body1"/>
+    </body>
+    <body name="horn2" pos="0.2165 -0.125 0">
+        <joint name="horn2_joint" type="hinge" axis="0.5 0.866 0" pos="0 0 0" limited="true" range="-1.57 1.57" damping="15" armature="0.2"/>
+        <geom class="horn" material="body2"/>
+    </body>
+    <body name="horn3" pos="0 0.25 0">
+        <joint name="horn3_joint" type="hinge" axis="-1 0 0" pos="0 0 0" limited="true" range="-1.57 1.57" damping="15" armature="0.2"/>
+        <geom class="horn" material="body3"/>
+    </body>
+   </worldbody>
+<!-- Actuator -->
+ <actuator>
+    <position name="horn1" joint="horn1_joint" kp="200" ctrlrange="-1.57 1.57"/>
+    <position name="horn2" joint="horn2_joint" kp="200" ctrlrange="-1.57 1.57"/>
+    <position name="horn3" joint="horn3_joint" kp="200" ctrlrange="-1.57 1.57"/>
+</actuator>
+
+</mujoco>

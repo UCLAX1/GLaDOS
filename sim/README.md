@@ -15,7 +15,6 @@ pip install -r requirements.txt
 
 ```bash
 python3 -m mujoco.viewer --mjcf=model/glados.xml
-
 ```
 
 Run this from inside the `sim/` folder with the venv active.
