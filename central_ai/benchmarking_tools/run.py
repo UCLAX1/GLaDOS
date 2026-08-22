@@ -32,6 +32,7 @@ from pathlib import Path
 from datetime import datetime
 
 OLLAMA_URL       = "http://localhost:11434/api/chat"
+LLAMACPP_URL     = "http://localhost:8080/v1/chat/completions"  # llama.cpp --server default port
 CASES_DIR        = Path(__file__).parent / "test_cases"
 LEADERBOARD_FILE = Path(__file__).parent / "leaderboard.json"
 
@@ -95,7 +96,7 @@ GLADOS_SYSTEM_WITH_SENSORS = (
 )
 
 
-# ── Ollama API ────────────────────────────────────────────────────────────────
+# ── Backend API ───────────────────────────────────────────────────────────────
 
 def call_ollama(model, messages, timeout=60):
     payload = {
@@ -116,6 +117,45 @@ def call_ollama(model, messages, timeout=60):
                 "error": "Ollama not running — start with: ollama serve"}
     except Exception as e:
         return {"content": "", "latency": 0, "error": str(e)}
+
+
+def call_llamacpp(messages, timeout=120, url=None):
+    """
+    Calls a llama.cpp server running with --server flag.
+    llama.cpp exposes an OpenAI-compatible endpoint at /v1/chat/completions.
+
+    Start the server with:
+        llama-server -m bonsai-8b.gguf --port 8080 -ngl 99
+
+    Or with Metal (Apple Silicon):
+        llama-server -m bonsai-8b.gguf --port 8080 -ngl 99 --metal
+    """
+    endpoint = url or LLAMACPP_URL
+    payload = {
+        "messages":    messages,
+        "temperature": 0.7,
+        "stream":      False,
+    }
+    t0 = time.time()
+    try:
+        r = requests.post(endpoint, json=payload, timeout=timeout)
+        r.raise_for_status()
+        elapsed = time.time() - t0
+        content = r.json()["choices"][0]["message"]["content"]
+        return {"content": content, "latency": elapsed, "error": None}
+    except requests.exceptions.ConnectionError:
+        return {"content": "", "latency": 0,
+                "error": f"llama.cpp server not running — start with: llama-server -m <model.gguf> --port 8080"}
+    except Exception as e:
+        return {"content": "", "latency": 0, "error": str(e)}
+
+
+def call_backend(backend, model, messages, timeout=120, llamacpp_url=None):
+    """Dispatch to the correct backend."""
+    if backend == "llamacpp":
+        return call_llamacpp(messages, timeout=timeout, url=llamacpp_url)
+    else:
+        return call_ollama(model, messages, timeout=timeout)
 
 
 # ── JSON Parsing ──────────────────────────────────────────────────────────────
@@ -207,7 +247,7 @@ PERSONA_AUTO_CHECKS = [
 ]
 
 
-def run_persona_suite(model, cases):
+def run_persona_suite(model, cases, backend="ollama", llamacpp_url=None):
     """Auto-scores persona tests against PERSONA_AUTO_CHECKS."""
     results = []
 
@@ -221,7 +261,7 @@ def run_persona_suite(model, cases):
         messages.append({"role": "user", "content": user_msg})
 
         print(f"    running: {case['id']}...", flush=True, end="")
-        resp = call_ollama(model, messages)
+        resp = call_backend(backend, model, messages, llamacpp_url=llamacpp_url)
         print(f" {resp['latency']:.1f}s", flush=True)
 
         if resp["error"]:
@@ -264,7 +304,7 @@ def run_persona_suite(model, cases):
 
 # ── Output Format Suite ───────────────────────────────────────────────────────
 
-def run_output_format_suite(model, cases):
+def run_output_format_suite(model, cases, backend="ollama", llamacpp_url=None):
     """Runs automated format checks defined per test case."""
     results = []
 
@@ -287,7 +327,7 @@ def run_output_format_suite(model, cases):
         checks = case.get("checks", [])
 
         print(f"    running: {case['id']}...", flush=True, end="")
-        resp = call_ollama(model, messages)
+        resp = call_backend(backend, model, messages, llamacpp_url=llamacpp_url)
         print(f" {resp['latency']:.1f}s", flush=True)
 
         if resp["error"]:
@@ -319,7 +359,7 @@ def run_output_format_suite(model, cases):
 
 # ── Latency Suite ─────────────────────────────────────────────────────────────
 
-def run_latency_suite(model):
+def run_latency_suite(model, backend="ollama", llamacpp_url=None):
     """Three prompt sizes — measures cold/warm response time."""
     short_prompt  = "What are you?"
     medium_prompt = (
@@ -343,7 +383,7 @@ def run_latency_suite(model):
             {"role": "user",   "content": prompt},
         ]
         print(f"    latency/{label}...", flush=True, end="")
-        resp = call_ollama(model, messages)
+        resp = call_backend(backend, model, messages, llamacpp_url=llamacpp_url)
         print(f" {resp['latency']:.1f}s", flush=True)
 
         parsed, _ = parse_glados_response(resp["content"])
@@ -538,6 +578,14 @@ def main():
         "--leaderboard", action="store_true",
         help="Print the current leaderboard without running any tests"
     )
+    parser.add_argument(
+        "--backend", choices=["ollama", "llamacpp"], default="ollama",
+        help="Inference backend (default: ollama). Use 'llamacpp' for llama.cpp --server"
+    )
+    parser.add_argument(
+        "--llamacpp-url", default=None,
+        help=f"llama.cpp server URL (default: {LLAMACPP_URL})"
+    )
     args = parser.parse_args()
 
     if args.leaderboard:
@@ -570,9 +618,10 @@ def main():
     for model in args.models:
         print(f"\n▶ {model}", flush=True)
 
-        persona_results = run_persona_suite(model, persona_cases)      if persona_cases else []
-        format_results  = run_output_format_suite(model, format_cases) if format_cases else []
-        latency_results = run_latency_suite(model) if args.suite in ("all", "latency") else []
+        kw = {"backend": args.backend, "llamacpp_url": args.llamacpp_url}
+        persona_results = run_persona_suite(model, persona_cases, **kw)      if persona_cases else []
+        format_results  = run_output_format_suite(model, format_cases, **kw) if format_cases else []
+        latency_results = run_latency_suite(model, **kw) if args.suite in ("all", "latency") else []
 
         all_results[model] = {
             "persona": persona_results,
