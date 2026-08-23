@@ -14,12 +14,12 @@ r = sr.Recognizer()
 # print(sr.Microphone.list_microphone_names())
 
 # VVV has to be manually inputted based on the name of the actual microphone in GLADOS
-preferred_mic_name = "Microphone Array (Realtek(R) Au"
+# preferred_mic_name = "Microphone Array (Realtek(R) Au"
 # preferred_mic_name = "Microphone (NVIDIA Broadcast)"
 # preferred_mic_name = "Microphone Array (Realtek(R) Audio)"
+preferred_mic_name = None  # set to mic name substring to select a specific mic, None for system default
 
-# print(f"Using Microphone: {preferred_mic_name}")
-preferred_mic_device_index = sr.Microphone.list_microphone_names().index(preferred_mic_name)
+preferred_mic_device_index = sr.Microphone.list_microphone_names().index(preferred_mic_name) if preferred_mic_name else None
 
 while True:
     try:
