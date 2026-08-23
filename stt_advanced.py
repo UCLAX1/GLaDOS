@@ -201,11 +201,6 @@ class Recorder():
     CHUNKS_PER_SECOND = SAMPLE_RATE / CHUNK_SIZE
     SECONDS_PER_CHUNK = CHUNK_SIZE / SAMPLE_RATE
 
-    PRE_AUDIO_CHUNK_BUFFER_DURATION = 0.3 # store 0.3 seconds of chunks
-    PRE_AUDIO_CHUNK_BUFFER_SIZE = int(PRE_AUDIO_CHUNK_BUFFER_DURATION * CHUNKS_PER_SECOND) # max num chunks
-
-    SPEECH_PROB_THRESHOLD = 0.5
-
     def __init__(
         self,
         transcriber_device: str,
@@ -216,8 +211,14 @@ class Recorder():
         realtime_transcriber_model_type="tiny",
         enable_realtime_transcription=False,
         enable_early_transcription=True,
+        speech_prob_threshold=0.5,
+        pre_audio_chunk_buffer_duration=0.3,
         language=None
     ):
+        self.speech_prob_threshold = speech_prob_threshold
+        self.pre_audio_chunk_buffer_duration = pre_audio_chunk_buffer_duration,
+
+        self.pre_audio_chunk_buffer_size = int(pre_audio_chunk_buffer_duration * self.CHUNKS_PER_SECOND) # max num chunks
 
         self.enable_realtime_transcription = enable_realtime_transcription
         self.enable_early_transcription = enable_early_transcription
@@ -231,7 +232,7 @@ class Recorder():
 
         # when we first detect speech, it's only after a few ms of speech is said, and we need to add that to the buffer
         self.pre_audio_chunks_rolling_buffer: collections.deque[list[bytes]] = collections.deque(
-            maxlen=self.PRE_AUDIO_CHUNK_BUFFER_SIZE
+            maxlen=self.pre_audio_chunk_buffer_size
         ) 
 
         # chunks with speech with the pre-audio chunks appended to the front
@@ -371,7 +372,7 @@ class Recorder():
             # see: "What is endpointing and why is a fixed timeout insufficient?"
             # right now, this code uses a fixed timeout of 1 second
 
-            self.vad_detects_speech = self.speech_confidence > self.SPEECH_PROB_THRESHOLD
+            self.vad_detects_speech = self.speech_confidence > self.speech_prob_threshold
             self.vad_detects_speech_start = self.vad_detects_speech and not self.vad_detects_speech_previous
             self.vad_detects_speech_stop = not self.vad_detects_speech and self.vad_detects_speech_previous
         
