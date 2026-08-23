@@ -29,6 +29,7 @@ import time
 import queue
 import collections
 import threading
+import multiprocessing as mp
 from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
@@ -290,11 +291,14 @@ class Recorder():
         self.speech_confidence: float = 0.0
         # self.boundary_detected: bool = False
 
-        self.audio = pyaudio.PyAudio()
+        # self.vad_process = mp.Process(target=self._vad_worker)
+        # self.vad_process.start()
 
         self.vad_thread = threading.Thread(target=self._vad_worker, daemon=True)
         self.vad_thread.start()
 
+
+        self.audio = pyaudio.PyAudio()
         self.stream = self.audio.open(
             format=pyaudio.paInt16,
             channels=self.NUM_CHANNELS,
