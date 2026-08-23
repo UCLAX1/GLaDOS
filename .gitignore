@@ -90,5 +90,5 @@ tmp/
 scratch/
 
 # user
-microphone-results.wav
-pre-audio.wav
+listening/microphone-results.wav
+listening/pre-audio.wav
