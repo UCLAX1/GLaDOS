@@ -26,3 +26,13 @@ Scripts in `demos/` must be run with `mjpython` on macOS (idk weird thing it doe
 ```bash
 mjpython demos/chaos.py # hehe funny thingy
 ```
+
+## Trouble opening the sim?
+
+If `python3 -m mujoco.viewer` isn't working, use `demos/view.py` instead:
+
+```bash
+mjpython demos/view.py model/glados.xml
+```
+
+Must be `mjpython`, not `python3` — the passive viewer requires it on macOS.

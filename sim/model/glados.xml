@@ -37,15 +37,15 @@
         <joint name="main_swivel_joint" type="hinge" axis="0 0 1" pos="0 0 0" limited="true" range="-3.14159 3.14159" damping="15" armature="0.2"/>
         <geom type="cylinder" size="0.09 0.01"/>
 
-        <!-- Upper arm — no joint -->
+        <!-- Upper arm — no joint 457.2 mm -->
         <body name="upper_arm" pos="0 0 -0.01" euler="0 0.3491 0">
-          <geom type="ellipsoid" size="0.06 0.05 0.185" pos="0 0 -0.185" mass="8.0"/>
+          <geom type="box" size="0.03 0.03 0.2286" pos="0 0 -0.2286" mass="8.0"/>
 
-          <!-- Elbow joint — L1=0.40m below swivel -->
-          <body name="lower_arm" pos="0 0 -0.40">
+          <!-- Elbow joint — L1=  457.2 mm (upper arm) + 152.4 mm (elbow joint) below swivel -->
+          <body name="lower_arm" pos="0 0 -0.6092">
             <joint name="lower_arm_joint" type="hinge" axis="0 1 0" pos="0 0 0" limited="true" range="0 1.5" damping="80" armature="0.1"/>
-            <!-- Lower arm — L2=0.33m, ~5kg -->
-            <geom type="ellipsoid" size="0.05 0.04 0.15" pos="0 0 -0.175" mass="5.0"/>
+            <!-- Lower arm — L2=304.8 mm, ~5kg -->
+            <geom type="box" size="0.02 0.02 0.1524" pos="0 0 -0.1524" mass="5.0"/>
 
             <!--
               Push-rod platform — L2=0.33m below elbow.
