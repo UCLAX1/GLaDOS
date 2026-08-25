@@ -90,7 +90,7 @@ def transcription_worker(
                 # do nothing
                 pass
             
-            # skip_event.clear()
+            skip_event.clear()
 
             try:
                 speech_chunks = audio_to_transcribe_queue.get(timeout=0.1)
@@ -173,6 +173,7 @@ def vad_worker(
     vad_model.to(vad_device)
 
     vad_process_loaded.value = True
+    print("vad_process_loaded is True")
 
     vad_detects_speech = False
     vad_detects_speech_previous = False
@@ -259,6 +260,7 @@ def vad_worker(
 
                     # print("submitting early transcription request")
                     audio_to_final_transcribe_queue.put(speech_chunks)
+
                     time_submitted_final_transcription_request = time.time()
 
             if (not vad_detects_speech) and is_speaking.value:
@@ -356,7 +358,8 @@ class Recorder():
         language=None,
     ):
 
-        self.pause_event = mp.Event()
+        self.recording_pause_event = mp.Event()
+        self.transcription_pause_event = mp.Event()
         self.stop_event = mp.Event()
 
         self.speech_prob_threshold = speech_prob_threshold
@@ -420,7 +423,7 @@ class Recorder():
                 self.speech_confidence,
                 self.is_speaking,
                 self.stop_event,
-                self.pause_event,
+                self.recording_pause_event,
             ),
             daemon=True,
         )
@@ -442,7 +445,7 @@ class Recorder():
                 self.on_transcription_update_callback,
                 self.final_transcription_worker_is_busy,
                 self.stop_event,
-                self.pause_event,
+                self.transcription_pause_event,
                 self.final_transcription_skip_event,
                 True,
                 self.should_keep_queue, 
@@ -464,7 +467,7 @@ class Recorder():
                     self.on_realtime_transcription_update_callback,
                     self.realtime_transcription_worker_is_busy,
                     self.stop_event,
-                    self.pause_event,
+                    self.transcription_pause_event,
                     self.realtime_transcription_skip_event,
                     False,
                     None,
@@ -496,27 +499,25 @@ class Recorder():
     def is_paused(self):
         return self.pause_event.is_set()
 
+    def is_transcription_paused(self):
+        return self.transcription_pause_event.is_set()
+
     def start(self):
         self.resume()
-    
+
     def resume(self):
-        self.pause_event.clear()
+        self.resume_transcription()
         self.stream.start_stream()
 
         # self.final_transcription_skip_event.clear()
 
         # if self.enable_realtime_transcription:
         #     self.realtime_transcription_skip_event.clear()
-
+    
     def pause(self):
-        self.pause_event.set()
         self.stream.stop_stream()
 
-        if self.final_transcription_worker_is_busy:
-            self.final_transcription_skip_event.set()
-
-        if self.enable_realtime_transcription and self.realtime_transcription_worker_is_busy:
-            self.realtime_transcription_skip_event.set()
+        self.pause_transcription(clear_transcription_queue=False) # already clearing queues in _clear_buffers_and_values
 
         self._clear_buffers_and_values()
 
@@ -525,7 +526,8 @@ class Recorder():
         """
         Permanently closes the whole thing
         """
-        self.pause_event.clear()
+        self.recording_pause_event.clear()
+        self.transcription_pause_event.clear()
         self.stop_event.set()
 
         self.stream.stop_stream()
@@ -542,24 +544,46 @@ class Recorder():
             q.close()
 
 
-        if self.final_transcription_worker is not None:
-            self.final_transcription_worker.join()
-        if self.enable_realtime_transcription and self.realtime_transcription_worker is not None:
-            self.realtime_transcription_worker.join()
-        if self.vad_process is not None:
-            self.vad_process.join()
-
+        # if self.final_transcription_worker is not None:
+        #     self.final_transcription_worker.join()
+        # if self.enable_realtime_transcription and self.realtime_transcription_worker is not None:
+        #     self.realtime_transcription_worker.join()
+        # if self.vad_process is not None:
+        #     self.vad_process.join()
     
+    def resume_transcription(self, clear_transcription_queue=True):
+        if clear_transcription_queue:
+            self._clear_transcription_queues()
+
+        self.transcription_pause_event.clear()
+
+    def pause_transcription(self, clear_transcription_queue=True):
+        self.transcription_pause_event.set()
+
+        if clear_transcription_queue:
+            self._clear_transcription_queues()
+
+        if self.final_transcription_worker_is_busy:
+            self.final_transcription_skip_event.set()
+
+        if self.enable_realtime_transcription and self.realtime_transcription_worker_is_busy:
+            self.realtime_transcription_skip_event.set()
+
+
     def _clear_buffers_and_values(self):
         clear_queue(self.audio_queue)
         clear_queue(self.should_keep_queue)
-        clear_queue(self.audio_to_final_transcribe_queue)
-        clear_queue(self.audio_to_realtime_transcribe_queue)
+        self._clear_transcription_queues()
         self.speech_chunks.clear()
         self.is_speaking.value = False
         self.speech_confidence.value = 0.0
         self.final_transcription_worker_is_busy.value = False
         self.realtime_transcription_worker_is_busy.value = False
+    
+    def _clear_transcription_queues(self):
+        clear_queue(self.audio_to_final_transcribe_queue)
+        if self.enable_realtime_transcription:
+            clear_queue(self.audio_to_realtime_transcribe_queue)
         
     
     def __del__(self):
@@ -639,15 +663,16 @@ if __name__ == '__main__':
         try:
             while True:
 
-                # if not pause_toggle and time.time() - start > 2:
-                #     recorder.pause()
-                #     pause_toggle = True
-                #     print("paused")
+                if not pause_toggle and time.time() - start > 3:
+                    # recorder.pause()
+                    recorder.pause_transcription()
+                    pause_toggle = True
+                    print("paused")
 
-                # if not resume_toggle and time.time() - start > 2.5:
-                #     recorder.resume()
-                #     resume_toggle = True
-                #     print("resumed")
+                if not resume_toggle and time.time() - start > 5:
+                    recorder.resume_transcription()
+                    resume_toggle = True
+                    print("resumed")
 
                 # DISPLAYING STUFF TO CONSOLE
 
@@ -696,6 +721,8 @@ if __name__ == '__main__':
                 table.add_row(Text(f"size of audio queue: {recorder.audio_queue.qsize()}"))
                 table.add_row(Text(f"size of transcription queue (including currently transcribing): {recorder.audio_to_final_transcribe_queue.qsize() + recorder.final_transcription_worker_is_busy.value}"))
                 table.add_row(Text(f"size of realtime transcription queue (including currently transcribing): {recorder.audio_to_realtime_transcribe_queue.qsize() + recorder.realtime_transcription_worker_is_busy.value}"))
+                table.add_row(Text(f"is paused: {recorder.is_transcription_paused()}"))
+                table.add_row(Text(f"skip event: {recorder.final_transcription_skip_event.is_set()}"))
                 # table.add_row(Text(f"time since detected speech stop: {silence_duration}"))
                 table.add_row(transcribed_rich_text)
                 panel = Panel(table, title="[bold]Live VAD Monitor[/bold]", border_style="blue")
