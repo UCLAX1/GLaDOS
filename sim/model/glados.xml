@@ -31,51 +31,20 @@
     <!-- Ceiling mount point — world center -->
     <body name="ceiling_mount" pos="0 0 0">
       <geom type="box" size="0.1 0.1 0.005" material="mount"/>
-
       <!-- Main swivel — rotates the whole arm left/right -->
       <body name="main_swivel" pos="0 0 -0.01">
         <joint name="main_swivel_joint" type="hinge" axis="0 0 1" pos="0 0 0" limited="true" range="-3.14159 3.14159" damping="15" armature="0.2"/>
         <geom type="cylinder" size="0.09 0.01"/>
-
         <!-- Upper arm — no joint 457.2 mm -->
-        <body name="upper_arm" pos="0 0 -0.01" euler="0 0.3491 0">
-          <geom type="box" size="0.03 0.03 0.2286" pos="0 0 -0.2286" mass="8.0"/>
-
-          <!-- Elbow joint — L1=  457.2 mm (upper arm) + 152.4 mm (elbow joint) below swivel -->
-          <body name="lower_arm" pos="0 0 -0.6092">
-            <joint name="lower_arm_joint" type="hinge" axis="0 1 0" pos="0 0 0" limited="true" range="0 1.5" damping="80" armature="0.1"/>
-            <!-- Lower arm — L2=304.8 mm, ~5kg -->
-            <geom type="box" size="0.02 0.02 0.1524" pos="0 0 -0.1524" mass="5.0"/>
-
-            <!--
-              Push-rod platform — L2=0.33m below elbow.
-              Both tilt joints (neck = side tilt, head = nod) share this single pivot point,
-              The head/eye assembly hangs below this pivot by the rod length.
-            -->
-            <body name="neck_platform" pos="0 0 -0.33">
-              <joint name="tilt_joint" type="hinge" axis="1 0 0" pos="0 0 -0.03" limited="true" range="-0.3 0.3" damping="5" armature="0.01"/>
-              <joint name="nod_joint"  type="hinge" axis="0 1 0" pos="0 0 -0.03" limited="true" range="-0.6 0.4" damping="5" armature="0.01"/>
-              <geom type="sphere" size="0.015" pos="0 0 -0.03" rgba="0.3 0.3 0.3 1"/>
-
-              <!-- Head/eye assembly — L3=0.18m total from neck_platform to eye tip -->
-              <!-- neck_platform→head: 0.10m  +  head→eye: 0.07m  +  eye half-height: 0.01m = 0.18m -->
-              <!-- TODO: tune head pos z once rod length is measured from real hardware -->
-              <body name="head" pos="0 0 -0.10">
-                <geom type="cylinder" size="0.07 0.04" euler="1.5708 0 0" mass="3.0"/>
-
-                <!-- IK reference point — tip of eye -->
-                <site name="end_effector" pos="0 0 -0.08" size="0.0005" rgba="1 0 0 1"/>
-
-                <!-- Eye — extends/retracts from head -->
-                <body name="eye" pos="0 0 -0.07">
-                  <joint name="eye_joint" type="slide" axis="0 0 -1" pos="0 0 0" limited="true" range="-0.002 0.002"/>
-                  <geom type="cylinder" size="0.015 0.010" material="eye"/>
-                </body>
-
+          <body name="upper_arm" pos="0 0 -0.01" euler="0 0.3491 0">
+            <geom type="box" size="0.03 0.03 0.2286" pos="0 0 -0.2286" mass="8.0"/>
+            <!-- Elbow joint — L1=  457.2 mm (upper arm) + 152.4 mm (elbow joint) below swivel -->
+              <body name="lower_arm" pos="0 0 -0.6092">
+                <joint name="lower_arm_joint" type="hinge" axis="0 1 0" pos="0 0 0" limited="true" range="0 1.5" damping="80" armature="0.1"/>
+                <!-- Lower arm — L2=304.8 mm, ~5kg -->
+                <geom type="box" size="0.02 0.02 0.1524" pos="0 0 -0.1524" mass="5.0"/>
               </body>
-            </body>
           </body>
-        </body>
       </body>
     </body>
   </worldbody>
@@ -85,10 +54,10 @@
     <exclude body1="ceiling_mount"  body2="main_swivel"/>
     <exclude body1="main_swivel"    body2="upper_arm"/>
     <exclude body1="upper_arm"      body2="lower_arm"/>
-    <exclude body1="lower_arm"      body2="neck_platform"/>
-    <exclude body1="neck_platform"  body2="head"/>
+    <!-- <exclude body1="lower_arm"      body2="neck_platform"/> -->
+    <!-- <exclude body1="neck_platform"  body2="head"/>
     <exclude body1="head"           body2="eye"/>
-    <exclude body1="lower_arm"      body2="head"/>
+    <exclude body1="lower_arm"      body2="head"/> -->
   </contact>
 
   <!--
@@ -97,9 +66,9 @@
   <actuator>
     <position name="main_swivel_actuator" joint="main_swivel_joint" kp="200" ctrlrange="-3.14159 3.14159"/>
     <position name="lower_arm_actuator"   joint="lower_arm_joint"   kp="2000" ctrlrange="0 1.5"/>
-    <position name="tilt_actuator"         joint="tilt_joint"         kp="200" ctrlrange="-0.3 0.3"/>
+    <!-- <position name="tilt_actuator"         joint="tilt_joint"         kp="200" ctrlrange="-0.3 0.3"/>
     <position name="nod_actuator"          joint="nod_joint"          kp="200" ctrlrange="-0.6 0.4"/>
-    <position name="eye_actuator"         joint="eye_joint"          kp="200" ctrlrange="-0.002 0.002"/>
+    <position name="eye_actuator"         joint="eye_joint"          kp="200" ctrlrange="-0.002 0.002"/> -->
   </actuator>
 
 </mujoco>
