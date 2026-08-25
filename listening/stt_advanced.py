@@ -346,21 +346,51 @@ class Recorder():
         self,
         transcriber_device: str,
         vad_device: str,
-        on_transcription_update_callback,
-        on_realtime_transcription_update_callback=None,
-        transcriber_model_type="distil-large-v3",
-        realtime_transcriber_model_type="tiny",
+        on_transcription_update_callback: Callable,
+        on_realtime_transcription_update_callback: Callable=None,
+        transcriber_model_type: str="distil-large-v3",
+        realtime_transcriber_model_type: str="tiny",
         enable_realtime_transcription=False,
         enable_early_transcription=True,
         speech_prob_threshold=0.5,
         pre_audio_chunk_buffer_duration=0.3,
         post_speech_silence_duration=1.0,
-        language=None,
+        language: str=None,
     ):
+        """Initialize recorder
 
-        self.recording_pause_event = mp.Event()
-        self.transcription_pause_event = mp.Event()
-        self.stop_event = mp.Event()
+        param: transcriber_device: "cuda" or "cpu"
+        param: vad_device: "cuda" or "cpu"
+        param: on_transcription_update_callback: 
+            What to do when final transcription is done.
+        param: on_realtime_transcription_update_callback: 
+            What to do when realtime transcription is done.
+        param: transcriber_model_type: 
+            Model type of the final transcriber.
+            Only if using faster-whisper, deprecated for nvidia-parakeet.
+        param: realtime_transcriber_model_type: 
+            Same as above but for the realtime transcriber
+        param: enable_realtime_transcription: 
+            Whether it provides transcriptions in real time while there is speech,
+            or if it should only wait until a sentence is done to transcribe.
+        param: enable_early_transcription: an optimization technique: 
+            This makes it run the final transcription as early as it can, and overwrite it when new. 
+            Basically it will be transcribing more, but the final transcriptions will come faster.
+        param: speech_prob_threshold: 
+            How confident the VAD has to be in order to declare audio as speech.
+            Float from 0-1.
+        param: pre_audio_chunk_buffer_duration:
+            How many seconds of audio to store before speech is detected.
+            This many seconds of audio is appended to the start of the speech buffer.
+        param: post_speech_silence_duration:
+            How many seconds of silent audio needs to be detected before
+            the program declares there is no more speech.
+        param: language:
+            ex: "en"
+            The language passed to the model.
+            If None, then the model will try to guess the language.
+        """
+
 
         self.speech_prob_threshold = speech_prob_threshold
         self.pre_audio_chunk_buffer_duration = pre_audio_chunk_buffer_duration,
@@ -394,6 +424,10 @@ class Recorder():
         self.audio_to_realtime_transcribe_queue: mp.Queue[list[bytes]] = mp.Queue()
 
         self.post_speech_silence_duration = post_speech_silence_duration # time to wait after speaking first not detected, in seconds
+
+        self.recording_pause_event = mp.Event()
+        self.transcription_pause_event = mp.Event()
+        self.stop_event = mp.Event()
 
         self.is_speaking = mp.Value('i', 0)
 
