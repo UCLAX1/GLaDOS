@@ -1,0 +1,17 @@
+# Scraping
+requests
+beautifulsoup4
+
+# Transcription + emotion tagging
+faster-whisper
+transformers
+torch
+soundfile
+
+# Audio classification / dataset prep
+librosa
+numpy
+
+# XTTS v2 fine-tuning (GPU machine)
+coqui-tts
+trainer
