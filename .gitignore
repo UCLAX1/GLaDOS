@@ -88,3 +88,19 @@ benchmark/results/
 # Local scratch
 tmp/
 scratch/
+
+# Voice training — audio data (large, keep local or on GPU)
+speech/voice_training/raw_audio/
+speech/voice_training/sorted/
+speech/voice_training/auto_sorted/
+speech/voice_training/dataset/
+speech/voice_training/data/
+speech/voice_training/logs/
+
+# Voice training — runtime/scratch files
+speech/voice_training/debug_html.py
+speech/voice_training/.sort_progress*.json
+
+# TTS — generated audio output
+out.wav
+test*.wav
