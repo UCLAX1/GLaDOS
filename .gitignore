@@ -89,6 +89,9 @@ benchmark/results/
 tmp/
 scratch/
 
+# user
+listening/microphone-results.wav
+listening/pre-audio.wav
 # Voice training — audio data (large, keep local or on GPU)
 speech/voice_training/raw_audio/
 speech/voice_training/sorted/
