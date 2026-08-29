@@ -1,11 +1,38 @@
 # Sim
 
-This is the MuJoCo sim.
+MuJoCo simulation of the GLaDOS arm. The XML model is in `model/glados.xml`.
 
-The XML model is in the [model](model/) folder.
-
-Use the following command to view and adjust features:
+## Setup
 
 ```bash
-python3 -m mujoco.viewer --mjcf=<path to file>
+cd sim
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 ```
+
+## View the model
+
+```bash
+python3 -m mujoco.viewer --mjcf=model/glados.xml
+```
+
+Run this from inside the `sim/` folder with the venv active.
+
+## Run demos
+
+Scripts in `demos/` must be run with `mjpython` on macOS (idk weird thing it does):
+
+```bash
+mjpython demos/chaos.py # hehe funny thingy
+```
+
+## Trouble opening the sim?
+
+If `python3 -m mujoco.viewer` isn't working, use `demos/view.py` instead:
+
+```bash
+mjpython demos/view.py model/glados.xml
+```
+
+Must be `mjpython`, not `python3` — the passive viewer requires it on macOS.

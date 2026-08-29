@@ -1,0 +1,62 @@
+# Tool Calling Test Cases
+# NOT YET IMPLEMENTED — run.py does not load this file.
+# Kept here as a spec for future work once the tool-calling architecture is defined.
+#
+# Fake sensor state is injected into the system prompt.
+# expected_tool: which tool the model MUST call (null = no tool should be called)
+# expected_params: key/value pairs to check (numeric params allow ±15° tolerance)
+
+- id: person_detected_track
+  description: "Vision + DOA detects person — should call look_at_person with correct angle"
+  sensor_state:
+    person_detected: true
+    person_count: 1
+    bbox_xyxy: [300, 180, 450, 420]
+    doa_angle_degrees: 45
+    optical_flow: low
+  user_message: "Someone just walked into the room."
+  expected_tool: look_at_person
+  expected_params:
+    angle: 45
+
+- id: room_query
+  description: "User asks what GLaDOS sees — should check sensor state before answering"
+  sensor_state:
+    person_detected: true
+    person_count: 2
+    doa_angle_degrees: 90
+    optical_flow: medium
+  user_message: "What do you see right now?"
+  expected_tool: get_room_state
+
+- id: wave_detected
+  description: "Person waving (high optical flow, gesture tag) — should express an emotion physically"
+  sensor_state:
+    person_detected: true
+    person_count: 1
+    gesture_detected: wave
+    doa_angle_degrees: 30
+    optical_flow: high
+  user_message: "I'm waving at you."
+  expected_tool: express_emotion
+
+- id: no_person_no_track
+  description: "Empty room — should NOT call look_at_person, should query state instead"
+  sensor_state:
+    person_detected: false
+    person_count: 0
+    optical_flow: none
+  user_message: "Is anyone in the room with me?"
+  expected_tool: get_room_state
+
+- id: multiple_people_doa
+  description: "Three people detected — should track toward the DOA source angle"
+  sensor_state:
+    person_detected: true
+    person_count: 3
+    doa_angle_degrees: 120
+    optical_flow: medium
+  user_message: "There are a few of us here to see you."
+  expected_tool: look_at_person
+  expected_params:
+    angle: 120
