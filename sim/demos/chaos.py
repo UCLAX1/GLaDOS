@@ -4,7 +4,7 @@
 import os, sys, math, time, pathlib
 
 if os.environ.get("GLADOS_HARDWARE"):
-    print("⛔  SIM ONLY — real hardware detected. Aborting.")
+    print("SIM ONLY — real hardware detected. Aborting.")
     sys.exit(1)
 
 import mujoco, mujoco.viewer
