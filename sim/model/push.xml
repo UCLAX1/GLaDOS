@@ -1,9 +1,11 @@
-<mujoco model="glados_arm">
+<mujoco model="glados_push">
 
   <compiler angle="radian"/>
-   <!-- Draw joint axes/pivots in the viewer -->
+
+
+
+  <!-- Draw joint axes/pivots in the viewer -->
   <visual>
-    <!-- <scale jointlength="0.9" jointwidth="0.9"/> -->
     <scale jointlength="0.005" jointwidth="0.0003"/>
     <headlight ambient="0.4 0.4 0.4"/>
   </visual>
@@ -11,95 +13,162 @@
   <!-- Physics settings -->
   <option timestep="0.002" gravity="0 0 -9.81"/>
 
- 
-     
-      
-
   <default>
     <!-- closed-loop parts overlap by design; collision fights the equality solver -->
     <geom contype="0" conaffinity="0"/>
-    <default class="horn">
-      <geom type="box" size="0.001125 0.001125 0.0075" pos="0 0 0.0075"/>
-    </default>
   </default>
 
   <!-- materials like unity -->
   <asset>
-    <material name = "body1" rgba = "1 0 0 1" shininess = "0.4" specular = "0.3"/>
-    <material name = "body2" rgba = "0 1 0 1" shininess = "0.4" specular = "0.3"/>
-    <material name = "body3" rgba = "0 0 1 1" shininess = "0.4" specular = "0.3"/>
-    <material name = "body" rgba = "0.1 0.1 0.1 1" shininess = "0.2" specular = "0.2"/>
-    <material name = "horn" rgba = "1 0.5 0 1" shininess = "0.4" specular = "0.3"/>
+    <material name="body1" rgba="1 0 0 1" shininess="0.4" specular="0.3"/>
+    <material name="body2" rgba="0 1 0 1" shininess="0.4" specular="0.3"/>
+    <material name="body3" rgba="0 0 1 1" shininess="0.4" specular="0.3"/>
+    <material name="body"  rgba="0.1 0.1 0.1 1" shininess="0.2" specular="0.2"/>
+    <material name="horn"  rgba="1 0.5 0 1" shininess="0.4" specular="0.3"/>
+    <material name="eye"   rgba="1.0 0.78 0.0 1" shininess="1.0" specular="0.8" emission="0.4"/>
+    <material name="gray"  rgba="0.55 0.55 0.55 1" shininess="0.3" specular="0.2"/>
   </asset>
 
   <worldbody>
-    <!-- all the components right here -->
-    <!-- red is body1, green is body2, blue is body3, orange is horn -->
-    <body name="horn1" pos="-0.02165 -0.0125 0">
-      <joint name="horn1_joint" type="hinge" axis="0.5 -0.866 0" pos="0 0 0" limited="true" range="-1.57 1.57" damping="15" armature="0.2"/>
-      <geom class="horn" material="body1"/>
-      <!-- rod: dangling branch, closed onto the plate via the equality/connect block below -->
-      <body name="rod1" pos="0 0 0.015">
-        <joint name="rod1_joint" type="ball" pos="0 0 0" damping="0.01" armature="0.001"/>
-        <geom name="rod1_geom" type="cylinder" fromto="0 0 0 0 0 0.08" size="0.0015" material="horn"/>
-        <site name="rod1_tip" pos="0 0 0.08" size="0.003"/>
+    <light name="top" pos="0 0 2" dir="0 0 -1" diffuse="0.8 0.8 0.8"/>
+
+    <!--
+      head_support: stand-in for the head_mount site frame on
+      lower_arm in glados.xml (see OPEN QUESTIONS above). Everything
+      below is local to this body.
+    -->
+    <body name="head_support" pos="0 0 0">
+
+      <!-- Shared mounting plate: all 3 linear actuators sit on this one plate
+           instead of separate per-station reference plates. Radius covers the
+           r_s=0.055 mount circle plus actuator-housing clearance. -->
+      <geom name="linact_base_plate" type="cylinder" pos="0 0 0.0015" size="0.075 0.0015" material="gray"/>
+
+      <!--
+        Station 0, a0=210 deg: linear actuator (slide) with a
+        hinge+horn on its tip, no rod — the horn itself reaches the
+        plate. Horn travel +/-60 deg about the mounted center (which
+        is now defined as "pointing straight at the plate", see
+        OPEN QUESTIONS). No slide range set.
+      -->
+      <body name="linact0" pos="-0.04763 -0.0275 0">
+        <joint name="linact0_joint" type="slide" axis="0 0 -1" pos="0 0 0" damping="5" armature="0.05"/>
+        <geom type="capsule" fromto="0 0 0 0 0 -0.03" size="0.004" material="body1"/>
+        <site name="linact0_tip" pos="0 0 -0.03" size="0.003" rgba="1 1 0 1"/>
+        <!-- moving plate: travel indicator, tracks the slide only (doesn't rotate with horn0) -->
+        <geom name="linact0_slide_plate" type="box" pos="0 0 -0.0285" size="0.006 0.006 0.0015" material="body1"/>
+        <body name="horn0" pos="0 0 -0.03">
+          <joint name="horn0_joint" type="hinge" axis="0.5 -0.86603 0" pos="0 0 0"
+                 limited="true" range="-1.0472 1.0472" damping="15" armature="0.2"/>
+          <!-- No rod: horn geom itself extended to 0.06083m and re-pointed so its tip lands
+               exactly on plate_0 at qpos=0. Vector computed from this station's actual mount
+               depth and plate_0's actual position (off-hinge-plane error ~0, confirmed
+               numerically) — not guessed. -->
+          <geom type="capsule" fromto="0 0 0 0.00866 0.005 -0.06" size="0.005" material="body1"/>
+          <site name="horn0_tip" pos="0.00866 0.005 -0.06" size="0.003"/>
+        </body>
       </body>
-    </body>
-    <body name="horn2" pos="0.02165 -0.0125 0">
-      <joint name="horn2_joint" type="hinge" axis="0.5 0.866 0" pos="0 0 0" limited="true" range="-1.57 1.57" damping="15" armature="0.2"/>
-      <geom class="horn" material="body2"/>
-      <body name="rod2" pos="0 0 0.015">
-        <joint name="rod2_joint" type="ball" pos="0 0 0" damping="0.01" armature="0.001"/>
-        <geom name="rod2_geom" type="cylinder" fromto="0 0 0 0 0 0.08" size="0.0015" material="horn"/>
-        <site name="rod2_tip" pos="0 0 0.08" size="0.003"/>
+
+      <!--
+        Station 1, a1=330 deg: same as station 0, mirrored.
+      -->
+      <body name="linact1" pos="0.04763 -0.0275 0">
+        <joint name="linact1_joint" type="slide" axis="0 0 -1" pos="0 0 0" damping="5" armature="0.05"/>
+        <geom type="capsule" fromto="0 0 0 0 0 -0.03" size="0.004" material="body2"/>
+        <site name="linact1_tip" pos="0 0 -0.03" size="0.003" rgba="1 1 0 1"/>
+        <!-- moving plate: travel indicator, tracks the slide only (doesn't rotate with horn1) -->
+        <geom name="linact1_slide_plate" type="box" pos="0 0 -0.0285" size="0.006 0.006 0.0015" material="body2"/>
+        <body name="horn1" pos="0 0 -0.03">
+          <joint name="horn1_joint" type="hinge" axis="0.5 0.86603 0" pos="0 0 0"
+                 limited="true" range="-1.0472 1.0472" damping="15" armature="0.2"/>
+          <!-- No rod: horn geom extended to 0.06083m and re-pointed so its tip lands exactly
+               on plate_1 at qpos=0, mirrored from station 0. -->
+          <geom type="capsule" fromto="0 0 0 -0.00866 0.005 -0.06" size="0.005" material="body2"/>
+          <site name="horn1_tip" pos="-0.00866 0.005 -0.06" size="0.003"/>
+        </body>
       </body>
-    </body>
-    <body name="horn3" pos="0 0.025 0">
-      <joint name="horn3_joint" type="hinge" axis="-1 0 0" pos="0 0 0" limited="true" range="-1.57 1.57" damping="15" armature="0.2"/>
-      <geom class="horn" material="body3"/>
-      <body name="rod3" pos="0 0 0.015">
-        <joint name="rod3_joint" type="ball" pos="0 0 0" damping="0.01" armature="0.001"/>
-        <geom name="rod3_geom" type="cylinder" fromto="0 0 0 0 0 0.08" size="0.0015" material="horn"/>
-        <site name="rod3_tip" pos="0 0 0.08" size="0.003"/>
+
+      <!--
+        Station 2, a2=90 deg: linear actuator (slide) with the rod
+        bolted straight on — fixed angle, no horn, no hinge.
+      -->
+      <body name="linact2" pos="0 0.055 0">
+        <joint name="linact2_joint" type="slide" axis="0 0 -1" pos="0 0 0" damping="5" armature="0.05"/>
+        <geom type="capsule" fromto="0 0 0 0 0 -0.03" size="0.004" material="body3"/>
+        <site name="linact2_tip" pos="0 0 -0.03" size="0.003" rgba="1 1 0 1"/>
+        <!-- moving plate: travel indicator, station 2 has no horn to match length against -->
+        <geom name="linact2_slide_plate" type="box" pos="0 0 -0.0285" size="0.006 0.006 0.0015" material="body3"/>
+        <!-- fixed station: ball socket -> flat plate/rectangle (no horn) -> face via plate_2 -->
+        <body name="plate2" pos="0 0 -0.03">
+          <!-- damping/armature bumped from a 0.01/0.001 placeholder — near-zero
+               there let the plate flop under the head's weight ("folding like
+               a string"). Still coarse, retune once real mass numbers are in. -->
+          <joint name="plate2_joint" type="ball" pos="0 0 0" damping="10" armature="0.1"/>
+          <geom name="plate2_geom" type="box" pos="0 -0.0175 -0.045" zaxis="0 -0.035 -0.09"
+                size="0.01 0.003 0.048285" material="horn"/>
+          <site name="plate2_tip" pos="0 -0.035 -0.09" size="0.003"/>
+        </body>
+      </body>
+
+      <!-- Plate: central pivot, ball joint at its own origin -->
+      <body name="neck_platform" pos="0 0 -0.09">
+        <joint name="neck_platform_joint" type="ball" pos="0 0 0" damping="20" armature="0.2"/>
+        <geom name="neck_platform_geom" type="cylinder" size="0.05 0.003" material="body"/>
+        <site name="plate_0" pos="-0.03897 -0.0225 0" size="0.002"/>
+        <site name="plate_1" pos="0.03897 -0.0225 0" size="0.002"/>
+        <site name="plate_2" pos="0 0.045 0" size="0.002"/>
+
+        <!-- Head/eye assembly — L3=0.18m total from neck_platform to eye tip -->
+        <!-- neck_platform→head: 0.10m  +  head→eye: 0.07m  +  eye half-height: 0.01m = 0.18m -->
+        <!-- TODO: tune head pos z once rod length is measured from real hardware -->
+        <body name="head" pos="0 0 -0.10">
+          <geom type="cylinder" size="0.07 0.04" euler="1.5708 0 0" mass="3.0"/>
+
+          <!-- IK reference point — tip of eye -->
+          <site name="end_effector" pos="0 0 -0.08" size="0.0005" rgba="1 0 0 1"/>
+
+          <!-- Eye — extends/retracts from head -->
+          <body name="eye" pos="0 0 -0.07">
+            <joint name="eye_joint" type="slide" axis="0 0 -1" pos="0 0 0" limited="true" range="-0.002 0.002"/>
+            <geom type="cylinder" size="0.015 0.010" material="eye"/>
+          </body>
+
+        </body>
       </body>
     </body>
 
-    <!-- fixed central post: world geom, not a body -->
-    <geom name="post" type="cylinder" fromto="0 0 0 0 0 0.095" size="0.002" material="body"/>
-
-    <!-- head plate: pinned at center via ball joint, tilts/leans freely, cannot translate -->
-    <body name="plate" pos="0 0 0.095">
-      <joint name="plate_joint" type="ball" pos="0 0 0" damping="0.01" armature="0.001"/>
-      <geom name="plate_geom" type="box" size="0.02 0.02 0.003" material="body" mass="0.05"/>
-      <!-- asymmetric marker so yaw is visible in the viewer -->
-      <geom name="plate_marker" type="box" size="0.004 0.004 0.004" pos="0.025 0 0.004" material="horn" density="0"/>
-      <site name="anchor1" pos="-0.02165 -0.0125 0" size="0.002"/>
-      <site name="anchor2" pos="0.02165 -0.0125 0" size="0.002"/>
-      <site name="anchor3" pos="0 0.025 0" size="0.002"/>
-    </body>
   </worldbody>
 
-<!-- Actuator -->
- <actuator>
-    <position name="horn1" joint="horn1_joint" kp="200" ctrlrange="-1.57 1.57"/>
-    <position name="horn2" joint="horn2_joint" kp="200" ctrlrange="-1.57 1.57"/>
-    <position name="horn3" joint="horn3_joint" kp="200" ctrlrange="-1.57 1.57"/>
-</actuator>
+  <!-- Actuator -->
+  <actuator>
+    <position name="horn0_actuator" joint="horn0_joint" kp="200" ctrlrange="-1.0472 1.0472"/>
+    <position name="horn1_actuator" joint="horn1_joint" kp="200" ctrlrange="-1.0472 1.0472"/>
+    <!-- TODO: ctrlrange is a placeholder — no stroke spec confirmed yet, tune once mechanical measures it -->
+    <!-- kp/kv much higher than horn's (200): a real leadscrew actuator is non-backdrivable,
+         it should hold its commanded position against the loop-closure reaction force from
+         the horn/rod instead of getting dragged by it. neck_platform has no actuator of its
+         own (only damping), so it's the compliant member that should absorb that motion. -->
+    <position name="linact0_actuator" joint="linact0_joint" kp="5000" kv="32" ctrlrange="-0.01 0.01"/>
+    <position name="linact1_actuator" joint="linact1_joint" kp="5000" kv="32" ctrlrange="-0.01 0.01"/>
+    <position name="linact2_actuator" joint="linact2_joint" kp="5000" kv="32" ctrlrange="-0.01 0.01"/>
+    <!-- the head -->
+    
+  </actuator>
 
-  <!-- close the loop: each dangling rod tip is pinned to its plate anchor -->
+  <!-- explicit horn<->actuator excludes (requested); geoms are already
+       globally contype=0/conaffinity=0 above so no contact exists either
+       way — see note below on what's actually moving the actuator -->
+  <contact>
+    <exclude body1="linact0" body2="horn0"/>
+    <exclude body1="linact1" body2="horn1"/>
+    <exclude body1="linact2" body2="plate2"/>
+  </contact>
+
+  <!-- close the loop: each horn/plate tip is pinned to its plate anchor -->
   <equality>
-    <connect site1="rod1_tip" site2="anchor1" solref="0.002 1"/>
-    <connect site1="rod2_tip" site2="anchor2" solref="0.002 1"/>
-    <connect site1="rod3_tip" site2="anchor3" solref="0.002 1"/>
+    <connect site1="horn0_tip" site2="plate_0" solref="0.002 1"/>
+    <connect site1="horn1_tip" site2="plate_1" solref="0.002 1"/>
+    <connect site1="plate2_tip" site2="plate_2" solref="0.002 1"/>
   </equality>
 
 </mujoco>
-
-  <!-- PUSH-ROD MECHANISM PARAMETERS -- swap values here. -->
-       <!-- MJCF has no variables/macros, so these are also baked into -->
-       <!-- the positions/sizes below; keep them in sync with this table. -->
-        <!-- R (center -> servo pivot)      = 0.025  confirmed (d=0.05 m circle) -->
-         <!-- rod length L                   = 0.08   confirmed (ball-to-ball) -->
-         <!-- horn length                    = 0.015  PLACEHOLDER, unmeasured -->
-         <!-- plate height = horn + L        = 0.095  derived -->
-         <!-- servo spacing                  = 120 deg assumed -->

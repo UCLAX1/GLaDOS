@@ -107,3 +107,6 @@ speech/voice_training/.sort_progress*.json
 # TTS — generated audio output
 out.wav
 test*.wav
+
+#sim
+videos/
