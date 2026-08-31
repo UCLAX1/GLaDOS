@@ -110,3 +110,6 @@ test*.wav
 
 #sim
 videos/
+
+#vision 
+vision/known_faces/
