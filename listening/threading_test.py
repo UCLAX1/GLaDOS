@@ -471,6 +471,8 @@ class Recorder():
         print("loading transcriber...")
         self.transcriber = Transcriber(device=self.transcriber_device, model_type=transcriber_model_type, language=self.language)
 
+        print("loaded transcriber")
+
         self.final_transcription_worker_is_busy = mp.Value('i', False)
 
         self.final_transcription_skip_event = mp.Event()
@@ -681,6 +683,8 @@ if __name__ == '__main__':
 
     realtime_model_type = "distil-small.en"
 
+    before_recorder = time.time()
+
     recorder = Recorder(
         transcriber_device=transcriber_device,
         vad_device=vad_device,
@@ -696,6 +700,8 @@ if __name__ == '__main__':
         # language="en",
     )
     recorder.start()
+
+    print(f"time taken to init recorder: {time.time() - before_recorder}")
 
     start = time.time()
 

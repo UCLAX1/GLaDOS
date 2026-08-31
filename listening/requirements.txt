@@ -1,6 +1,7 @@
 silero-vad
 SpeechRecognition
 faster-whisper
+nemo-toolkit['asr']
 matplotlib
 numpy
 pyaudio
