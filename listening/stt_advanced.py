@@ -69,30 +69,51 @@ def preprocess_text(text: str) -> str:
     
     return text
 
+def transcribed_text_handler(
+    transcribed_text_queue: mp.Queue,
+    stop_event: mp.Event,
+    on_transcription_update_callback: Callable
+):
+    while not stop_event.is_set():
+        try:
+            transcribed_text = transcribed_text_queue.get(timeout=0.01)
+        except queue.Empty:
+            continue
+
+        # print("got transcribed te")
+        
+        threading.Thread(
+            target=on_transcription_update_callback,
+            args=(transcribed_text,),
+            daemon=True,
+        ).start()
+
 def transcription_worker(
-    audio_to_transcribe_queue,
-    transcriber,
-    on_transcription_update_callback,
-    is_busy,
+    audio_to_transcribe_queue: mp.Queue,
+    transcriber_args,
+    transcriber_loaded_event: mp.Event,
+    transcribed_text_queue: mp.Queue,
+    is_busy: mp.Value,
     time_taken_to_transcribe: mp.Value,
     stop_event: mp.Event,
-    pause_event: mp.Event,
+    resume_event: mp.Event,
     skip_event: mp.Event,
     enable_early_transcription=False,
     should_keep_queue=None, # set if enable_early_transcription=True
 ):
 
+    transcriber = Transcriber(**transcriber_args)
+    transcriber_loaded_event.set()
+
     try:
         while not stop_event.is_set():
 
-            while pause_event.is_set():
-                # do nothing
-                pass
+            resume_event.wait()
             
             skip_event.clear()
 
             try:
-                speech_chunks = audio_to_transcribe_queue.get(timeout=0.1)
+                speech_chunks = audio_to_transcribe_queue.get(timeout=0.01)
             except queue.Empty:
                 continue
 
@@ -118,7 +139,7 @@ def transcription_worker(
                 skip_event.clear()
                 continue
 
-            if pause_event.is_set():
+            if not resume_event.is_set():
                 is_busy.value = False
                 continue
 
@@ -135,11 +156,7 @@ def transcription_worker(
                         continue
                 # --- END MORE EARLY TRANSCRIPTION LOGIC --- 
 
-            threading.Thread(
-                target=on_transcription_update_callback,
-                args=(transcribed_text,),
-                daemon=True,
-            ).start()
+            transcribed_text_queue.put(transcribed_text)
 
             is_busy.value = False
 
@@ -147,7 +164,7 @@ def transcription_worker(
         print("transcription worker: keyboard interrupt")
 
 def vad_worker(
-    vad_process_loaded: mp.Value,
+    vad_process_loaded_event: mp.Event,
     audio_queue,
     vad_device,
     pre_audio_chunks_rolling_buffer,
@@ -165,13 +182,12 @@ def vad_worker(
     speech_confidence: mp.Value,
     is_speaking: mp.Value,
     stop_event: mp.Event,
-    pause_event: mp.Event,
+    resume_event: mp.Event,
 ):
-    print("vad worker started")
     vad_model = load_silero_vad()
     vad_model.to(vad_device)
 
-    vad_process_loaded.value = True
+    vad_process_loaded_event.set()
 
     vad_detects_speech = False
     vad_detects_speech_previous = False
@@ -183,15 +199,14 @@ def vad_worker(
     try:
         while not stop_event.is_set():
 
-            while pause_event.is_set():
-                # do nothing
-                pass
+            resume_event.wait()
 
             if (audio_queue.qsize() > 100):
                 raise Exception("audio queue got too big, either hardware is too slow or I am bad at coding")
 
             try:
-                audio_chunk = audio_queue.get_nowait()
+                audio_chunk = audio_queue.get(timeout=0.01)
+                # audio_chunk = audio_queue.get_nowait()
             except queue.Empty:
                 continue
 
@@ -408,6 +423,10 @@ class Recorder():
         self.transcriber_device = transcriber_device
         self.vad_device = vad_device
 
+        TranscriberThreadType: Union[threading.Thread, mp.Process] = threading.Thread
+        if transcriber_device == "cpu":
+            TranscriberThreadType = mp.Process
+
         # when we first detect speech, it's only after a few ms of speech is said, and we need to add that to the buffer
         self.pre_audio_chunks_rolling_buffer: collections.deque[list[bytes]] = collections.deque(
             maxlen=self.pre_audio_chunk_buffer_size
@@ -427,10 +446,13 @@ class Recorder():
         self.realtime_transcription_worker_is_busy = mp.Value('i', 0)
         self.audio_to_realtime_transcribe_queue: mp.Queue[list[bytes]] = mp.Queue()
 
+        self.final_transcribed_text_queue: mp.Queue[str] = mp.Queue()
+        self.realtime_transcribed_text_queue: mp.Queue[str] = mp.Queue()
+
         self.post_speech_silence_duration = post_speech_silence_duration # time to wait after speaking first not detected, in seconds
 
-        self.recording_pause_event = mp.Event()
-        self.transcription_pause_event = mp.Event()
+        self.recording_resume_event = mp.Event()
+        self.transcription_resume_event = mp.Event()
         self.stop_event = mp.Event()
 
         self.is_speaking = mp.Value('i', 0)
@@ -438,13 +460,12 @@ class Recorder():
         self.speech_confidence = mp.Value('d', 0.0)
         # self.boundary_detected: bool = False
 
-        self.vad_process_loaded = mp.Value('i', 0)
-
+        vad_process_loaded_event = mp.Event()
 
         self.vad_process = mp.Process(
             target=vad_worker, 
             args=(
-                self.vad_process_loaded,
+                vad_process_loaded_event,
                 self.audio_queue,
                 self.vad_device,
                 self.pre_audio_chunks_rolling_buffer,
@@ -462,14 +483,11 @@ class Recorder():
                 self.speech_confidence,
                 self.is_speaking,
                 self.stop_event,
-                self.recording_pause_event,
+                self.recording_resume_event,
             ),
             daemon=True,
         )
         self.vad_process.start()
-
-        print("loading transcriber...")
-        self.transcriber = Transcriber(device=self.transcriber_device, model_type=transcriber_model_type, language=self.language)
 
         self.final_transcription_worker_is_busy = mp.Value('i', False)
 
@@ -477,51 +495,90 @@ class Recorder():
 
         self.time_taken_to_final_transcribe = mp.Value('d', 0.0)
 
-        self.final_transcription_worker = threading.Thread(
+        final_transcriber_loaded_event = mp.Event()
+
+        final_transcriber_args = dict(
+            device=self.transcriber_device, 
+            model_type=transcriber_model_type, 
+            language=self.language
+        )
+
+        final_transcription_worker_args = dict(
             target=transcription_worker,
             args=(
                 self.audio_to_final_transcribe_queue,
-                self.transcriber,
-                self.on_transcription_update_callback,
+                final_transcriber_args,
+                final_transcriber_loaded_event,
+                self.realtime_transcribed_text_queue,
                 self.final_transcription_worker_is_busy,
                 self.time_taken_to_final_transcribe,
                 self.stop_event,
-                self.transcription_pause_event,
+                self.transcription_resume_event,
                 self.final_transcription_skip_event,
                 True,
                 self.should_keep_queue, 
             ),
             daemon=True,
-        ).start()
+        )
+
+        self.final_transcription_worker = TranscriberThreadType(**final_transcription_worker_args).start()
 
         self.realtime_transcription_skip_event = mp.Event()
 
         self.time_taken_to_realtime_transcribe = mp.Value('d', 0.0)
 
         if self.enable_realtime_transcription:
-            print("loading realtime transcriber...")
-            self.realtime_transcriber = Transcriber(device=self.transcriber_device, model_type=realtime_transcriber_model_type, language=self.language)
 
+            realtime_transcriber_loaded_event = mp.Event()
 
-            self.realtime_transcription_worker = threading.Thread(
+            realtime_transcriber_args = dict(
+                device=self.transcriber_device,
+                model_type=realtime_transcriber_model_type,
+                language=self.language,
+            )
+
+            realtime_transcription_worker_args = dict(
                 target=transcription_worker, # the transcription_worker function
                 args=(
                     self.audio_to_realtime_transcribe_queue,
+                    realtime_transcriber_args,
+                    realtime_transcriber_loaded_event,
                     self.realtime_transcriber,
-                    self.on_realtime_transcription_update_callback,
+                    self.realtime_transcribed_text_queue,
                     self.realtime_transcription_worker_is_busy,
                     self.time_taken_to_realtime_transcribe,
                     self.stop_event,
-                    self.transcription_pause_event,
+                    self.transcription_resume_event,
                     self.realtime_transcription_skip_event,
                     False,
                     None,
                 ),
                 daemon=True,
-            ).start()
+            )
 
-        # self.time_start = time.time()
+            self.realtime_transcription_worker = TranscriberThreadType(**realtime_transcription_worker_args).start()
 
+        self.final_text_handler = threading.Thread(
+            target=transcribed_text_handler,
+            args=(
+                self.final_transcribed_text_queue,
+                self.stop_event,
+                self.on_transcription_update_callback,
+            ),
+            daemon=True,
+        )
+        self.final_text_handler.start()
+
+        self.realtime_text_handler = threading.Thread(
+            target=transcribed_text_handler,
+            args=(
+                self.realtime_transcribed_text_queue,
+                self.stop_event,
+                self.on_transcription_update_callback,
+            ),
+            daemon=True,
+        )
+        self.realtime_text_handler.start()
 
         self.audio = pyaudio.PyAudio()
         self.stream = self.audio.open(
@@ -534,25 +591,29 @@ class Recorder():
         )
         self.stream.stop_stream()
 
-        print("waiting for vad process...")
-
-        while not self.vad_process_loaded.value:
-            time.sleep(0.1)
+        vad_process_loaded_event.wait()
+        print("vad process loaded")
+        final_transcriber_loaded_event.wait()
+        print("final transcriber and worker loaded")
+        if self.enable_realtime_transcription:
+            realtime_transcriber_loaded_event.wait()
+            print("realtime transcriber and worker loaded")
 
         print("finished init of recorder")
     
     def is_paused(self):
-        return self.pause_event.is_set()
+        return not self.recording_resume_event.is_set()
 
     def is_transcription_paused(self):
-        return self.transcription_pause_event.is_set()
+        return not self.transcription_resume_event.is_set()
 
     def start(self):
         self.resume()
 
     def resume(self):
-        self.resume_transcription()
+        self.recording_resume_event.set()
         self.stream.start_stream()
+        self.resume_transcription()
 
         # self.final_transcription_skip_event.clear()
 
@@ -571,9 +632,19 @@ class Recorder():
         """
         Permanently closes the whole thing
         """
-        self.recording_pause_event.clear()
-        self.transcription_pause_event.clear()
         self.stop_event.set()
+
+        # resumes the workers so they can break out of their while loops
+        self.recording_resume_event.set()
+        self.transcription_resume_event.set()
+
+        if self.final_transcription_worker is not None:
+            self.final_transcription_worker.join()
+        if self.enable_realtime_transcription and self.realtime_transcription_worker is not None:
+            self.realtime_transcription_worker.join()
+        if self.vad_process is not None:
+            self.vad_process.join()
+
 
         self.stream.stop_stream()
         self.stream.close()
@@ -600,10 +671,10 @@ class Recorder():
         if clear_transcription_queue:
             self._clear_transcription_queues()
 
-        self.transcription_pause_event.clear()
+        self.transcription_resume_event.set()
 
     def pause_transcription(self, clear_transcription_queue=True):
-        self.transcription_pause_event.set()
+        self.transcription_resume_event.clear()
 
         if clear_transcription_queue:
             self._clear_transcription_queues()
@@ -708,16 +779,16 @@ if __name__ == '__main__':
         try:
             while True:
 
-                if not pause_toggle and time.time() - start > 3:
-                    # recorder.pause()
-                    recorder.pause_transcription()
-                    pause_toggle = True
-                    print("paused")
+                # if not pause_toggle and time.time() - start > 3:
+                #     # recorder.pause()
+                #     recorder.pause_transcription()
+                #     pause_toggle = True
+                #     print("paused")
 
-                if not resume_toggle and time.time() - start > 5:
-                    recorder.resume_transcription()
-                    resume_toggle = True
-                    print("resumed")
+                # if not resume_toggle and time.time() - start > 5:
+                #     recorder.resume_transcription()
+                #     resume_toggle = True
+                #     print("resumed")
 
                 # DISPLAYING STUFF TO CONSOLE
 
