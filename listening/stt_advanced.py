@@ -20,7 +20,6 @@
 
 from silero_vad import load_silero_vad
 import platform
-import keyboard
 import wave
 import torch
 import pyaudio
@@ -33,6 +32,8 @@ import queue
 import collections
 import threading
 import multiprocessing as mp
+
+import keyboard
 from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
@@ -121,6 +122,7 @@ def transcription_worker(
             except queue.Empty:
                 continue
 
+
             if enable_early_transcription:
                 # --- EARLY TRANSCRIPTION LOGIC --- 
                 initially_awaiting_keep = should_keep_queue.empty()
@@ -131,8 +133,9 @@ def transcription_worker(
                         continue
                 # --- END EARLY TRANSCRIPTION LOGIC --- 
 
-            transcription_start_time = time.time()
             is_busy.value = True
+
+            transcription_start_time = time.time()
 
             transcribed_text = transcriber.transcribe(speech_chunks)
 
@@ -294,8 +297,9 @@ def vad_worker(
             if enable_early_transcription \
                 and transcription_resume_event.is_set() \
                 and vad_detects_speech_start \
-                and is_speaking.value \
-                and final_transcription_worker_is_busy.value:
+                and is_speaking.value:
+                # and final_transcription_worker_is_busy.value:
+                # TODO: fix this ^^^
 
                 should_keep_queue.put(False) # discard
 
@@ -549,7 +553,7 @@ class Recorder():
                 self.audio_to_final_transcribe_queue,
                 final_transcriber_args,
                 final_transcriber_loaded_event,
-                self.realtime_transcribed_text_queue,
+                self.final_transcribed_text_queue,
                 self.final_transcription_worker_is_busy,
                 self.time_taken_to_final_transcribe,
                 self.stop_event,
@@ -583,7 +587,6 @@ class Recorder():
                     self.audio_to_realtime_transcribe_queue,
                     realtime_transcriber_args,
                     realtime_transcriber_loaded_event,
-                    self.realtime_transcriber,
                     self.realtime_transcribed_text_queue,
                     self.realtime_transcription_worker_is_busy,
                     self.time_taken_to_realtime_transcribe,
@@ -614,7 +617,7 @@ class Recorder():
             args=(
                 self.realtime_transcribed_text_queue,
                 self.stop_event,
-                self.on_transcription_update_callback,
+                self.on_realtime_transcription_update_callback,
             ),
             daemon=True,
         )
@@ -796,6 +799,7 @@ if __name__ == '__main__':
         transcribed_text = preprocess_text(transcribed_text_output)
         full_sentences.append(transcribed_text)
         realtime_transcribed_text = ""
+        # print(full_sentences)
 
     def on_realtime_transcription_update(realtime_transcribed_text_output: str):
         global realtime_transcribed_text
@@ -832,8 +836,8 @@ if __name__ == '__main__':
         transcriber_device=transcriber_device,
         vad_device=vad_device,
         language="en",
-        # enable_realtime_transcription=True,
-        enable_realtime_transcription=False,
+        enable_realtime_transcription=True,
+        # enable_realtime_transcription=False,
         enable_early_transcription=True,
         # enable_early_transcription=False,
         transcriber_model_type=model_type,
