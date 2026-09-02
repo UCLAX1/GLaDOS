@@ -104,7 +104,9 @@ def transcription_worker(
     resume_event: mp.Event,
     skip_event: mp.Event,
     enable_early_transcription=False,
-    should_keep_queue=None, # set if enable_early_transcription=True
+    should_keep_queue: mp.Queue=None, # only set for final transcription worker
+    realtime_transcriber_is_busy: mp.Value=None, # only set for final transcription worker
+    realtime_skip_event: mp.Event=None, # only set for final transcription worker
 ):
 
     transcriber = Transcriber(**transcriber_args)
@@ -164,6 +166,13 @@ def transcription_worker(
                 # --- END MORE EARLY TRANSCRIPTION LOGIC --- 
 
             transcribed_text_queue.put(transcribed_text)
+
+            # stops the realtime transcriber so it doesn't finish after the final transcriber
+            if (realtime_skip_event is not None) \
+                and (realtime_transcriber_is_busy is not None) \
+                and realtime_transcriber_is_busy.value:
+                # print("skipping realtime worker")
+                realtime_skip_event.set()
 
             is_busy.value = False
 
@@ -353,8 +362,8 @@ def vad_worker(
                     # print("submitting final transcription request")
 
                     if enable_early_transcription \
-                        and transcription_resume_event.is_set() \
-                        and final_transcription_worker_is_busy.value:
+                        and transcription_resume_event.is_set():
+                        # and final_transcription_worker_is_busy.value:
 
                         should_keep_queue.put(True) # keep
 
@@ -512,10 +521,11 @@ class Recorder():
         self.on_transcription_update_callback = on_transcription_update_callback
         self.on_realtime_transcription_update_callback = on_realtime_transcription_update_callback
 
+        self.final_transcription_worker_is_busy = mp.Value('i', False)
         self.audio_to_final_transcribe_queue: mp.Queue[list[bytes]] = mp.Queue()
         self.should_keep_queue: mp.Queue[bool] = mp.Queue()
 
-        self.realtime_transcription_worker_is_busy = mp.Value('i', 0)
+        self.realtime_transcription_worker_is_busy = mp.Value('i', False)
         self.audio_to_realtime_transcribe_queue: mp.Queue[list[bytes]] = mp.Queue()
 
         self.final_transcribed_text_queue: mp.Queue[str] = mp.Queue()
@@ -532,10 +542,8 @@ class Recorder():
         self.speech_confidence = mp.Value('d', 0.0)
         # self.boundary_detected: bool = False
 
-
-        self.final_transcription_worker_is_busy = mp.Value('i', False)
-
         self.final_transcription_skip_event = mp.Event()
+        self.realtime_transcription_skip_event = mp.Event()
 
         self.time_taken_to_final_transcribe = mp.Value('d', 0.0)
 
@@ -561,13 +569,14 @@ class Recorder():
                 self.final_transcription_skip_event,
                 self.enable_early_transcription,
                 self.should_keep_queue, 
+                self.realtime_transcription_worker_is_busy,
+                self.realtime_transcription_skip_event,
             ),
             daemon=True,
         )
 
         self.final_transcription_worker = TranscriberThreadType(**final_transcription_worker_args).start()
 
-        self.realtime_transcription_skip_event = mp.Event()
 
         self.time_taken_to_realtime_transcribe = mp.Value('d', 0.0)
 
@@ -595,6 +604,8 @@ class Recorder():
                     self.realtime_transcription_skip_event,
                     False,
                     None,
+                    None,
+                    None
                 ),
                 daemon=True,
             )
