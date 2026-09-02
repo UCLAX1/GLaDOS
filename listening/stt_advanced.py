@@ -88,8 +88,6 @@ def transcribed_text_handler(
         except queue.Empty:
             continue
 
-        # print("got transcribed te")
-        
         threading.Thread(
             target=on_transcription_update_callback,
             args=(transcribed_text,),
@@ -218,11 +216,13 @@ def vad_worker(
     sample_rate,
     post_speech_silence_duration,
     speech_prob_threshold,
+    min_speech_duration_for_transcription,
     enable_early_transcription,
     should_keep_queue,
     audio_to_final_transcribe_queue,
     enable_realtime_transcription,
     audio_to_realtime_transcribe_queue,
+    final_transcription_worker_is_busy: mp.Value,
     realtime_transcription_worker_is_busy: mp.Value,
     speech_confidence: mp.Value,
     is_speaking: mp.Value,
@@ -290,13 +290,16 @@ def vad_worker(
             # right now, this code uses a fixed timeout of 1 second
 
             vad_detects_speech = speech_confidence.value > speech_prob_threshold
-            vad_detects_speech_start = vad_detects_speech and not vad_detects_speech_previous
-            vad_detects_speech_stop = not vad_detects_speech and vad_detects_speech_previous
+            vad_detects_speech_start = vad_detects_speech and (not vad_detects_speech_previous)
+            vad_detects_speech_stop = (not vad_detects_speech) and vad_detects_speech_previous
         
-            if enable_early_transcription:
-                if vad_detects_speech_start and is_speaking.value:
-                    if transcription_resume_event.is_set():
-                        should_keep_queue.put(False) # discard
+            if enable_early_transcription \
+                and transcription_resume_event.is_set() \
+                and vad_detects_speech_start \
+                and is_speaking.value \
+                and final_transcription_worker_is_busy.value:
+
+                should_keep_queue.put(False) # discard
 
             if vad_detects_speech_start and (not is_speaking.value):
                 is_speaking.value = True
@@ -314,23 +317,29 @@ def vad_worker(
 
             seconds_of_speech_stored = len(speech_chunks) * seconds_per_chunk
             
-            if enable_realtime_transcription:
-                # submit realtime transcription only when the realtime transcription worker is not already transcribing something
-                if vad_detects_speech and seconds_of_speech_stored > 1.0 and not realtime_transcription_worker_is_busy.value and audio_to_realtime_transcribe_queue.empty():
-                    if transcription_resume_event.is_set():
-                        audio_to_realtime_transcribe_queue.put(speech_chunks)
+            # submit realtime transcription only when the realtime transcription worker is not already transcribing something
+            if enable_realtime_transcription \
+                and transcription_resume_event.is_set() \
+                and vad_detects_speech \
+                and seconds_of_speech_stored > 1.0 \
+                and (not realtime_transcription_worker_is_busy.value) \
+                and audio_to_realtime_transcribe_queue.empty():
+
+                audio_to_realtime_transcribe_queue.put(speech_chunks)
+
             
             if enable_early_transcription:
                 time_since_last_submitted_final_transcription_request = time.time() - time_submitted_final_transcription_request
 
                 if vad_detects_speech_stop \
-                    and time_since_last_submitted_final_transcription_request > 0.1:
-                    # and seconds_of_speech_stored > 0.5:
+                    and transcription_resume_event.is_set() \
+                    and time_since_last_submitted_final_transcription_request > 0.1 \
+                    and seconds_of_speech_stored > min_speech_duration_for_transcription:
 
                     # print("submitting early transcription request")
-                    if transcription_resume_event.is_set():
-                        audio_to_final_transcribe_queue.put(speech_chunks)
-                        time_submitted_final_transcription_request = time.time()
+
+                    audio_to_final_transcribe_queue.put(speech_chunks)
+                    time_submitted_final_transcription_request = time.time()
 
 
             if (not vad_detects_speech) and is_speaking.value:
@@ -339,22 +348,26 @@ def vad_worker(
 
                 if elapsed_silence > post_speech_silence_duration:
                     is_speaking.value = False
+                    # print("submitting final transcription request")
 
-                    if enable_early_transcription:
-                        if transcription_resume_event.is_set():
-                            should_keep_queue.put(True) # keep
+                    if enable_early_transcription \
+                        and transcription_resume_event.is_set() \
+                        and final_transcription_worker_is_busy.value:
 
-                    if not enable_early_transcription:
-                        # print("submitting final transcription request")
-                        if transcription_resume_event.is_set():
-                            audio_to_final_transcribe_queue.put(speech_chunks)
-                            time_submitted_final_transcription_request = time.time()
+                        should_keep_queue.put(True) # keep
+
+                    if (not enable_early_transcription) \
+                        and transcription_resume_event.is_set():
+                       
+                        audio_to_final_transcribe_queue.put(speech_chunks)
+                        time_submitted_final_transcription_request = time.time()
 
                     write_to_wav_file("microphone-results.wav", speech_chunks, 1, sample_rate)
 
                     speech_chunks.clear()
 
             vad_detects_speech_previous = vad_detects_speech
+
     except KeyboardInterrupt:
         pass
         # print("vad worker: keyboard interrupt")
@@ -429,6 +442,7 @@ class Recorder():
         speech_prob_threshold=0.5,
         pre_audio_chunk_buffer_duration=0.3,
         post_speech_silence_duration=1.0,
+        min_speech_duration_for_transcription=0.4,
         language: str=None,
     ):
         """Initialize recorder
@@ -467,6 +481,7 @@ class Recorder():
 
 
         self.speech_prob_threshold = speech_prob_threshold
+        self.min_speech_duration_for_transcription = min_speech_duration_for_transcription
         self.pre_audio_chunk_buffer_duration = pre_audio_chunk_buffer_duration,
 
         self.pre_audio_chunk_buffer_size = int(pre_audio_chunk_buffer_duration * self.CHUNKS_PER_SECOND) # max num chunks
@@ -515,51 +530,6 @@ class Recorder():
         self.speech_confidence = mp.Value('d', 0.0)
         # self.boundary_detected: bool = False
 
-        audio_process_loaded_event = mp.Event()
-
-        self.audio_process = mp.Process(
-            target=audio_worker,
-            args=(
-                self.audio_queue,
-                audio_process_loaded_event,
-                self.SAMPLE_RATE,
-                self.CHUNK_SIZE,
-                self.stop_event,
-                self.recording_resume_event,
-            ),
-            daemon=True,
-        )
-        self.audio_process.start()
-
-        vad_process_loaded_event = mp.Event()
-
-        self.vad_process = mp.Process(
-            target=vad_worker, 
-            args=(
-                vad_process_loaded_event,
-                self.audio_queue,
-                self.vad_device,
-                self.pre_audio_chunks_rolling_buffer,
-                self.speech_chunks,
-                self.SECONDS_PER_CHUNK,
-                self.SAMPLE_RATE,
-                self.post_speech_silence_duration,
-                self.speech_prob_threshold,
-                self.enable_early_transcription,
-                self.should_keep_queue,
-                self.audio_to_final_transcribe_queue,
-                self.enable_realtime_transcription,
-                self.audio_to_realtime_transcribe_queue,
-                self.realtime_transcription_worker_is_busy,
-                self.speech_confidence,
-                self.is_speaking,
-                self.stop_event,
-                self.recording_resume_event,
-                self.transcription_resume_event,
-            ),
-            daemon=True,
-        )
-        self.vad_process.start()
 
         self.final_transcription_worker_is_busy = mp.Value('i', False)
 
@@ -587,7 +557,7 @@ class Recorder():
                 self.stop_event,
                 self.transcription_resume_event,
                 self.final_transcription_skip_event,
-                True,
+                self.enable_early_transcription,
                 self.should_keep_queue, 
             ),
             daemon=True,
@@ -651,6 +621,54 @@ class Recorder():
             daemon=True,
         )
         self.realtime_text_handler.start()
+
+        audio_process_loaded_event = mp.Event()
+
+        self.audio_process = mp.Process(
+            target=audio_worker,
+            args=(
+                self.audio_queue,
+                audio_process_loaded_event,
+                self.SAMPLE_RATE,
+                self.CHUNK_SIZE,
+                self.stop_event,
+                self.recording_resume_event,
+            ),
+            daemon=True,
+        )
+        self.audio_process.start()
+
+        vad_process_loaded_event = mp.Event()
+
+        self.vad_process = mp.Process(
+            target=vad_worker, 
+            args=(
+                vad_process_loaded_event,
+                self.audio_queue,
+                self.vad_device,
+                self.pre_audio_chunks_rolling_buffer,
+                self.speech_chunks,
+                self.SECONDS_PER_CHUNK,
+                self.SAMPLE_RATE,
+                self.post_speech_silence_duration,
+                self.speech_prob_threshold,
+                self.min_speech_duration_for_transcription,
+                self.enable_early_transcription,
+                self.should_keep_queue,
+                self.audio_to_final_transcribe_queue,
+                self.enable_realtime_transcription,
+                self.audio_to_realtime_transcribe_queue,
+                self.final_transcription_worker_is_busy,
+                self.realtime_transcription_worker_is_busy,
+                self.speech_confidence,
+                self.is_speaking,
+                self.stop_event,
+                self.recording_resume_event,
+                self.transcription_resume_event,
+            ),
+            daemon=True,
+        )
+        self.vad_process.start()
 
         audio_process_loaded_event.wait()
         print("audio process loaded")
@@ -800,8 +818,9 @@ if __name__ == '__main__':
 
     # distil-small is less accurate but around 3x faster
     # model_type = "distil-large-v3" if self.device == "cuda" else "distil-small.en"
-    # model_type = "distil-medium.en"
-    model_type = "distil-large-v3"
+    model_type = "distil-small.en"
+    # check out the different model types here: https://github.com/SYSTRAN/faster-whisper/blob/ed9a06cd89a93e47838f564998a6c09b655d7f43/faster_whisper/transcribe.py#L640
+    # model_type = "distil-large-v3"
 
     realtime_model_type = "distil-small.en"
 
