@@ -169,7 +169,44 @@ def transcription_worker(
             is_busy.value = False
 
     except KeyboardInterrupt:
-        print("transcription worker: keyboard interrupt")
+        pass
+        # print("transcription worker: keyboard interrupt")
+
+def audio_worker(
+    audio_queue: mp.Queue,
+    audio_process_loaded_event: mp.Event,
+    sample_rate: int,
+    frames_per_buffer: int,
+    stop_event: mp.Event,
+    resume_event: mp.Event,
+):
+    audio = pyaudio.PyAudio()
+    stream = audio.open(
+        format=pyaudio.paInt16,
+        channels=1,
+        rate=sample_rate,
+        input=True,
+        frames_per_buffer=frames_per_buffer,
+    )
+    stream.start_stream()
+
+    audio_process_loaded_event.set()
+
+    try:
+        while not stop_event.is_set():
+            if not resume_event.is_set():
+                stream.stop_stream()
+                resume_event.wait()
+                stream.start_stream()
+            data: list[bytes] = stream.read(frames_per_buffer) # blocks
+            audio_queue.put(data)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        stream.stop_stream()
+        stream.close()
+        audio.terminate()
+
 
 def vad_worker(
     vad_process_loaded_event: mp.Event,
@@ -319,7 +356,8 @@ def vad_worker(
 
             vad_detects_speech_previous = vad_detects_speech
     except KeyboardInterrupt:
-        print("vad worker: keyboard interrupt")
+        pass
+        # print("vad worker: keyboard interrupt")
 
 
 class Transcriber():
@@ -371,7 +409,7 @@ class Transcriber():
 
 class Recorder():
 
-    NUM_CHANNELS=1
+    # NUM_CHANNELS=1
     SAMPLE_RATE=16000
     CHUNK_SIZE = 512 # num frames per buffer
 
@@ -476,6 +514,22 @@ class Recorder():
 
         self.speech_confidence = mp.Value('d', 0.0)
         # self.boundary_detected: bool = False
+
+        audio_process_loaded_event = mp.Event()
+
+        self.audio_process = mp.Process(
+            target=audio_worker,
+            args=(
+                self.audio_queue,
+                audio_process_loaded_event,
+                self.SAMPLE_RATE,
+                self.CHUNK_SIZE,
+                self.stop_event,
+                self.recording_resume_event,
+            ),
+            daemon=True,
+        )
+        self.audio_process.start()
 
         vad_process_loaded_event = mp.Event()
 
@@ -598,17 +652,8 @@ class Recorder():
         )
         self.realtime_text_handler.start()
 
-        self.audio = pyaudio.PyAudio()
-        self.stream = self.audio.open(
-            format=pyaudio.paInt16,
-            channels=self.NUM_CHANNELS,
-            rate=self.SAMPLE_RATE,
-            input=True,
-            frames_per_buffer=self.CHUNK_SIZE,
-            stream_callback=self._on_new_audio_chunk_callback,
-        )
-        self.stream.stop_stream()
-
+        audio_process_loaded_event.wait()
+        print("audio process loaded")
         vad_process_loaded_event.wait()
         print("vad process loaded")
         final_transcriber_loaded_event.wait()
@@ -630,7 +675,6 @@ class Recorder():
 
     def resume(self):
         self.recording_resume_event.set()
-        self.stream.start_stream()
         self.resume_transcription()
 
         # self.final_transcription_skip_event.clear()
@@ -639,7 +683,6 @@ class Recorder():
         #     self.realtime_transcription_skip_event.clear()
     
     def pause(self):
-        self.stream.stop_stream()
 
         self.recording_resume_event.clear()
 
@@ -664,12 +707,6 @@ class Recorder():
             self.realtime_transcription_worker.join()
         if self.vad_process is not None:
             self.vad_process.join()
-
-
-        self.stream.stop_stream()
-        self.stream.close()
-        self.audio.terminate()
-        self.audio = None
 
         self._clear_buffers_and_values()
 
@@ -723,12 +760,8 @@ class Recorder():
         
     
     def __del__(self):
-        if self.audio is not None:
+        if not self.stop_event.is_set():
             self.close()
-
-    def _on_new_audio_chunk_callback(self, audio_chunk: bytes, frame_count: int, time_info: dict, status: int) -> tuple:
-        self.audio_queue.put(audio_chunk)
-        return (None, pyaudio.paContinue)
     
 if __name__ == '__main__':
 
