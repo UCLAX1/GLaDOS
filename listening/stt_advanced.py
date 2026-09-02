@@ -19,7 +19,9 @@
 
 
 from silero_vad import load_silero_vad
-import speech_recognition as sr
+# from PySide6.QtWidgets import QApplication, QMainWindow, QLabel
+# from PySide6.QtCore import Qt
+import wave
 import torch
 import pyaudio
 import audioop
@@ -46,6 +48,13 @@ def int16_bytes_list_to_normalized_float32_ndarray(int16_bytes_list: list[bytes]
 
 def round_to_nearest(n, m):
     return (n + m - 1) // m * m
+
+def write_to_wav_file(file_name: str, audio_chunks: list[bytes], num_channels, sample_rate):
+    with wave.open(file_name, mode="wb") as wav_file:
+        wav_file.setnchannels(num_channels)
+        wav_file.setsampwidth(2) # 2 for 2-byte, 16-bit floats
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(b"".join(audio_chunks))
 
 def clear_queue(queue: Union[mp.Queue, queue.Queue]):
     while not queue.empty():
@@ -247,9 +256,7 @@ def vad_worker(
 
                 speech_chunks.extend(pre_audio_chunks_rolling_buffer)
 
-                audio_data = sr.AudioData(b"".join(pre_audio_chunks_rolling_buffer), sample_rate=sample_rate, sample_width=2) # 2 for 2 byte, 16 bit ints
-                with open("pre-audio.wav", "wb") as f:
-                    f.write(audio_data.get_wav_data())
+                write_to_wav_file("pre-audio.wav", pre_audio_chunks_rolling_buffer, 1, sample_rate)
 
                 pre_audio_chunks_rolling_buffer.clear()
 
@@ -291,11 +298,7 @@ def vad_worker(
                         audio_to_final_transcribe_queue.put(speech_chunks)
                         time_submitted_final_transcription_request = time.time()
 
-                    # print("writing audio data to file")
-                    audio_data = sr.AudioData(b"".join(speech_chunks), sample_rate=sample_rate, sample_width=2) # 2 for 2 byte, 16 bit ints
-                    with open("microphone-results.wav", "wb") as f:
-                        f.write(audio_data.get_wav_data())
-                    # print("done writing audio data to file")
+                    write_to_wav_file("microphone-results.wav", speech_chunks, 1, sample_rate)
 
                     speech_chunks.clear()
 
@@ -333,7 +336,6 @@ class Transcriber():
         # pretty accurate and about 4-5 times faster
         # self.faster_whisper_model = WhisperModel("distil-small.en", device="cuda", compute_type="float16")
 
-        # self.recognizer = sr.Recognizer()
 
     def transcribe(self, speech_chunks: list[bytes]) -> str:
         transcribed_text = ""
@@ -709,6 +711,17 @@ class Recorder():
     def _on_new_audio_chunk_callback(self, audio_chunk: bytes, frame_count: int, time_info: dict, status: int) -> tuple:
         self.audio_queue.put(audio_chunk)
         return (None, pyaudio.paContinue)
+    
+# class MainWindow(QMainWindow):
+#     def __init__(self):
+#         super().__init__()
+#         self.setWindowTitle("Transcriber Application")
+#         label = QLabel("Hello World")
+#         label.setAlignment(Qt.AlignCenter)
+
+#         self.setCentralWidget(label)
+    
+
 
 if __name__ == '__main__':
 
@@ -778,6 +791,7 @@ if __name__ == '__main__':
     with Live(console=console, refresh_per_second=60) as live:
         try:
             while True:
+                time.sleep(0.001)
 
                 # if not pause_toggle and time.time() - start > 3:
                 #     # recorder.pause()
