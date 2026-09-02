@@ -19,6 +19,7 @@
 
 
 from silero_vad import load_silero_vad
+import platform
 import keyboard
 import wave
 import torch
@@ -45,9 +46,6 @@ def int16_bytes_to_normalized_float32_ndarray(int16_bytes: bytes) -> np.ndarray:
 def int16_bytes_list_to_normalized_float32_ndarray(int16_bytes_list: list[bytes]) -> np.ndarray:
     return int16_bytes_to_normalized_float32_ndarray(b"".join(int16_bytes_list))
 
-def round_to_nearest(n, m):
-    return (n + m - 1) // m * m
-
 def write_to_wav_file(file_name: str, audio_chunks: list[bytes], num_channels, sample_rate):
     with wave.open(file_name, mode="wb") as wav_file:
         wav_file.setnchannels(num_channels)
@@ -57,7 +55,7 @@ def write_to_wav_file(file_name: str, audio_chunks: list[bytes], num_channels, s
 
 def clear_queue(queue: Union[mp.Queue, queue.Queue]):
     while not queue.empty():
-        queue.get_nowait()
+        queue.get()
 
 def preprocess_text(text: str) -> str:
     # ripped from https://github.com/KoljaB/RealtimeSTT/blob/master/tests/realtimestt_test.py
@@ -624,7 +622,7 @@ class Recorder():
 
         audio_process_loaded_event = mp.Event()
 
-        self.audio_process = mp.Process(
+        audio_process_args = dict(
             target=audio_worker,
             args=(
                 self.audio_queue,
@@ -636,6 +634,12 @@ class Recorder():
             ),
             daemon=True,
         )
+
+        if platform.system() == 'Linux':
+            self.audio_process = threading.Thread(**audio_process_args)
+        else: 
+            self.audio_process = mp.Process(**audio_process_args)
+
         self.audio_process.start()
 
         vad_process_loaded_event = mp.Event()
@@ -816,11 +820,11 @@ if __name__ == '__main__':
     print(f"transcriber device: {transcriber_device}")
     print(f"vad device: {vad_device}")
 
+    # check out the different model types here: https://github.com/SYSTRAN/faster-whisper/blob/ed9a06cd89a93e47838f564998a6c09b655d7f43/faster_whisper/transcribe.py#L640
     # distil-small is less accurate but around 3x faster
     # model_type = "distil-large-v3" if self.device == "cuda" else "distil-small.en"
-    model_type = "distil-small.en"
-    # check out the different model types here: https://github.com/SYSTRAN/faster-whisper/blob/ed9a06cd89a93e47838f564998a6c09b655d7f43/faster_whisper/transcribe.py#L640
-    # model_type = "distil-large-v3"
+    # model_type = "distil-small.en"
+    model_type = "distil-large-v3"
 
     realtime_model_type = "distil-small.en"
 
