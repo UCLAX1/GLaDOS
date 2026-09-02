@@ -19,8 +19,7 @@
 
 
 from silero_vad import load_silero_vad
-# from PySide6.QtWidgets import QApplication, QMainWindow, QLabel
-# from PySide6.QtCore import Qt
+import keyboard
 import wave
 import torch
 import pyaudio
@@ -192,7 +191,9 @@ def vad_worker(
     is_speaking: mp.Value,
     stop_event: mp.Event,
     resume_event: mp.Event,
+    transcription_resume_event: mp.Event,
 ):
+
     vad_model = load_silero_vad()
     vad_model.to(vad_device)
 
@@ -207,6 +208,15 @@ def vad_worker(
 
     try:
         while not stop_event.is_set():
+
+            # reload vad and reset variables if recording is paused
+            if not resume_event.is_set():
+                vad_model = load_silero_vad()
+                vad_model.to(vad_device)
+                vad_detects_speech = False
+                vad_detects_speech_previous = False
+                vad_detects_speech_start = False
+                vad_detects_speech_stop = False
 
             resume_event.wait()
 
@@ -248,7 +258,8 @@ def vad_worker(
         
             if enable_early_transcription:
                 if vad_detects_speech_start and is_speaking.value:
-                    should_keep_queue.put(False) # discard
+                    if transcription_resume_event.is_set():
+                        should_keep_queue.put(False) # discard
 
             if vad_detects_speech_start and (not is_speaking.value):
                 is_speaking.value = True
@@ -269,7 +280,8 @@ def vad_worker(
             if enable_realtime_transcription:
                 # submit realtime transcription only when the realtime transcription worker is not already transcribing something
                 if vad_detects_speech and seconds_of_speech_stored > 1.0 and not realtime_transcription_worker_is_busy.value and audio_to_realtime_transcribe_queue.empty():
-                    audio_to_realtime_transcribe_queue.put(speech_chunks)
+                    if transcription_resume_event.is_set():
+                        audio_to_realtime_transcribe_queue.put(speech_chunks)
             
             if enable_early_transcription:
                 time_since_last_submitted_final_transcription_request = time.time() - time_submitted_final_transcription_request
@@ -279,9 +291,10 @@ def vad_worker(
                     # and seconds_of_speech_stored > 0.5:
 
                     # print("submitting early transcription request")
-                    audio_to_final_transcribe_queue.put(speech_chunks)
+                    if transcription_resume_event.is_set():
+                        audio_to_final_transcribe_queue.put(speech_chunks)
+                        time_submitted_final_transcription_request = time.time()
 
-                    time_submitted_final_transcription_request = time.time()
 
             if (not vad_detects_speech) and is_speaking.value:
 
@@ -291,12 +304,14 @@ def vad_worker(
                     is_speaking.value = False
 
                     if enable_early_transcription:
-                        should_keep_queue.put(True) # keep
+                        if transcription_resume_event.is_set():
+                            should_keep_queue.put(True) # keep
 
                     if not enable_early_transcription:
                         # print("submitting final transcription request")
-                        audio_to_final_transcribe_queue.put(speech_chunks)
-                        time_submitted_final_transcription_request = time.time()
+                        if transcription_resume_event.is_set():
+                            audio_to_final_transcribe_queue.put(speech_chunks)
+                            time_submitted_final_transcription_request = time.time()
 
                     write_to_wav_file("microphone-results.wav", speech_chunks, 1, sample_rate)
 
@@ -486,6 +501,7 @@ class Recorder():
                 self.is_speaking,
                 self.stop_event,
                 self.recording_resume_event,
+                self.transcription_resume_event,
             ),
             daemon=True,
         )
@@ -625,6 +641,8 @@ class Recorder():
     def pause(self):
         self.stream.stop_stream()
 
+        self.recording_resume_event.clear()
+
         self.pause_transcription(clear_transcription_queue=False) # already clearing queues in _clear_buffers_and_values
 
         self._clear_buffers_and_values()
@@ -712,17 +730,6 @@ class Recorder():
         self.audio_queue.put(audio_chunk)
         return (None, pyaudio.paContinue)
     
-# class MainWindow(QMainWindow):
-#     def __init__(self):
-#         super().__init__()
-#         self.setWindowTitle("Transcriber Application")
-#         label = QLabel("Hello World")
-#         label.setAlignment(Qt.AlignCenter)
-
-#         self.setCentralWidget(label)
-    
-
-
 if __name__ == '__main__':
 
     # transcribed_text = ""
@@ -785,24 +792,21 @@ if __name__ == '__main__':
 
     print("Listening...")
 
-    pause_toggle = False
-    resume_toggle = False
-
     with Live(console=console, refresh_per_second=60) as live:
         try:
             while True:
-                time.sleep(0.001)
+                # if keyboard.is_pressed("p") and not recorder.is_paused():
+                #     recorder.pause()
 
-                # if not pause_toggle and time.time() - start > 3:
-                #     # recorder.pause()
-                #     recorder.pause_transcription()
-                #     pause_toggle = True
-                #     print("paused")
+                # if keyboard.is_pressed("r") and recorder.is_paused():
+                #     recorder.resume()
 
-                # if not resume_toggle and time.time() - start > 5:
-                #     recorder.resume_transcription()
-                #     resume_toggle = True
-                #     print("resumed")
+                # can't use rising edge detector since the keyboard library also detects auto-repeated key holds
+                if keyboard.is_pressed("p") and not recorder.is_transcription_paused():
+                    recorder.pause_transcription()
+
+                if keyboard.is_pressed("r") and recorder.is_transcription_paused():
+                    recorder.resume_transcription()
 
                 # DISPLAYING STUFF TO CONSOLE
 
@@ -838,6 +842,11 @@ if __name__ == '__main__':
                 else:
                     realtime_transcribing_status = "[bold white on dim red]  NOT REALTIME TRANSCRIBING    [/bold white on dim red]"
 
+                if recorder.is_transcription_paused():
+                    paused_status = "[bold white on green]  TRANSCRIPTION PAUSED  [/bold white on green]"
+                else:
+                    paused_status = "[bold white on dim red]  TRANSCRIPTION NOT PAUSED    [/bold white on dim red]"
+
                 progress.update(task_id, completed=recorder.speech_confidence.value * 100)
                 table.add_row(progress, status)
 
@@ -846,10 +855,10 @@ if __name__ == '__main__':
                 table.add_row(Text(f"time taken to realtime transcribe: {recorder.time_taken_to_realtime_transcribe.value:.3f}"), realtime_transcribing_status)
                 # table.add_row(Text(f"time taken to detect voice: {recorder.time_taken_to_detect_voice:.5f}"))
                 # table.add_row(Text(f"time taken to record: {time_taken_to_record:.3f}"))
-                table.add_row(Text(f"size of audio queue: {recorder.audio_queue.qsize()}"))
+                table.add_row(Text(f"size of audio queue: {recorder.audio_queue.qsize()}"), paused_status)
                 table.add_row(Text(f"size of transcription queue (including currently transcribing): {recorder.audio_to_final_transcribe_queue.qsize() + recorder.final_transcription_worker_is_busy.value}"))
                 table.add_row(Text(f"size of realtime transcription queue (including currently transcribing): {recorder.audio_to_realtime_transcribe_queue.qsize() + recorder.realtime_transcription_worker_is_busy.value}"))
-                table.add_row(Text(f"is paused: {recorder.is_transcription_paused()}"))
+                # table.add_row(Text(f"is paused: {recorder.is_paused()}"))
                 table.add_row(Text(f"skip event: {recorder.final_transcription_skip_event.is_set()}"))
                 # table.add_row(Text(f"time since detected speech stop: {silence_duration}"))
                 table.add_row(transcribed_rich_text)
