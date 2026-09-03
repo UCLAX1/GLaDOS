@@ -1,8 +1,8 @@
 # listening
 
-folder for audio detection for GLaDOS
+Reading the microphone and speech-recognition for GLaDOS.
 
-the main file is stt_advanced.py
+The main testing file is stt_test.py
 
 Recorder is the main class to use. It records audio and transcribes it. You can define callbacks to decide what happens when the final transcribed text is ready or when the realtime-transcribed text is ready.
 
