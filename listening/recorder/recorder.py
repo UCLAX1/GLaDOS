@@ -406,8 +406,6 @@ class Transcriber():
             transcribed_text += segment.text
         return transcribed_text
 
-        # # return recognizer.recognize_faster_whisper(audio_data, language="en")
-
 class Recorder():
 
     # NUM_CHANNELS=1

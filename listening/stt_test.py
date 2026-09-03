@@ -84,7 +84,6 @@ if __name__ == '__main__':
         on_transcription_update_callback=on_transcription_update,
         realtime_transcriber_model_type=realtime_model_type,
         on_realtime_transcription_update_callback=on_realtime_transcription_update,
-        # language="en",
     )
     recorder.start()
 
