@@ -8,37 +8,57 @@ import logging
 logging.getLogger('nemo_logger').setLevel(logging.ERROR)
 logging.disable(logging.CRITICAL)
 
-
-# def blank_log(*args, **kwargs):
-#     pass
-
-# from nemo.utils import logging as logger
-# logger.debug = blank_log
-# logger.info = blank_log
-# logger.warning = blank_log
-# logger.error = blank_log
-# logger.critical = blank_log
-
 import nemo.collections.asr as nemo_asr
 import time
 
-start = time.time()
+# if __name__ == "__main__":
 
-asr_model = nemo_asr.models.ASRModel.from_pretrained(model_name="nvidia/parakeet-tdt-0.6b-v3")
+#     start = time.time()
 
-print(f"time taken to load model: {time.time() - start}")
+#     asr_model = nemo_asr.models.ASRModel.from_pretrained(model_name="nvidia/parakeet-tdt-0.6b-v3")
 
-while True:
+#     print(f"time taken to load model: {time.time() - start}")
+
+#     while True:
+#         start = time.time()
+#         # output = asr_model.transcribe(["audio.mp3"])
+#         output = asr_model.transcribe(["../microphone-results.wav"], verbose=False)
+
+#         print(f"time taken to transcribe: {time.time() - start}")
+
+#         print(output[0].text)
+
+def transcription_worker():
+    print("process started")
     start = time.time()
-    # output = asr_model.transcribe(["audio.mp3"])
-    output = asr_model.transcribe(["../microphone-results.wav"], verbose=False)
 
-    print(f"time taken to transcribe: {time.time() - start}")
+    asr_model = nemo_asr.models.ASRModel.from_pretrained(model_name="nvidia/parakeet-tdt-0.6b-v3")
 
-    print(output[0].text)
+    print(f"time taken to load model: {time.time() - start}")
+
+    while True:
+        start = time.time()
+        # output = asr_model.transcribe(["audio.mp3"])
+        output = asr_model.transcribe(["../microphone-results.wav"], verbose=False)
+
+        print(f"time taken to transcribe: {time.time() - start}")
+
+        print(output[0].text)
+
+import multiprocessing as mp
+import threading
+
+if __name__ == "__main__":
+    process = threading.Thread(
+        target=transcription_worker(),
+        args=None,
+    )
+    process.start()
+
+    while True:
+        time.sleep(0.01)
 
 # import time
-
 
 # class Transcriber():
 

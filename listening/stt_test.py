@@ -39,7 +39,8 @@ if __name__ == '__main__':
         transcribed_text = preprocess_text(transcribed_text_output)
         full_sentences.append(transcribed_text)
         realtime_transcribed_text = ""
-        # print(full_sentences)
+
+        # print(transcribed_text)
 
     def on_realtime_transcription_update(realtime_transcribed_text_output: str):
         global realtime_transcribed_text
@@ -68,9 +69,14 @@ if __name__ == '__main__':
     # distil-small is less accurate but around 3x faster
     # model_type = "distil-large-v3" if self.device == "cuda" else "distil-small.en"
     # model_type = "distil-small.en"
-    model_type = "distil-large-v3"
+    # model_type = "distil-large-v3"
+    # model_type = "large-v3"
+    # model_type = "turbo"
+    model_type = "parakeet"
 
+    # be careful running the realtime model with parakeet since it takes up a lot of ram
     realtime_model_type = "distil-small.en"
+    # realtime_model_type = "parakeet"
 
     recorder = Recorder(
         transcriber_device=transcriber_device,

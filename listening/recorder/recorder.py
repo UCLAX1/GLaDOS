@@ -101,6 +101,8 @@ def transcription_worker(
             except queue.Empty:
                 continue
 
+            is_busy.value = True
+            # print("is busy: True")
 
             if enable_early_transcription:
                 # --- EARLY TRANSCRIPTION LOGIC --- 
@@ -112,11 +114,12 @@ def transcription_worker(
                         continue
                 # --- END EARLY TRANSCRIPTION LOGIC --- 
 
-            is_busy.value = True
 
             transcription_start_time = time.time()
 
+            # print("transcribing...")
             transcribed_text = transcriber.transcribe(speech_chunks)
+            # print("done transcribing")
 
             time_taken_to_transcribe.value = time.time() - transcription_start_time
 
@@ -138,6 +141,7 @@ def transcription_worker(
                         is_busy.value = False
                         raise Exception("FATAL ERROR: Timeout reached, should_keep queue remained empty after transcription completed")
                     if not should_keep:
+                        # print("is busy: False (not should_keep)")
                         is_busy.value = False
                         continue
                 # --- END MORE EARLY TRANSCRIPTION LOGIC --- 
@@ -151,6 +155,7 @@ def transcription_worker(
                 # print("skipping realtime worker")
                 realtime_skip_event.set()
 
+            # print("is busy: False")
             is_busy.value = False
 
     except KeyboardInterrupt:
@@ -220,7 +225,7 @@ def vad_worker(
 ):
 
     vad_model = load_silero_vad()
-    vad_model.to(vad_device)
+    vad_model = vad_model.to(vad_device)
 
     vad_process_loaded_event.set()
 
@@ -237,7 +242,7 @@ def vad_worker(
             # reload vad and reset variables if recording is paused
             if not resume_event.is_set():
                 vad_model = load_silero_vad()
-                vad_model.to(vad_device)
+                vad_model = vad_model.to(vad_device)
                 vad_detects_speech = False
                 vad_detects_speech_previous = False
                 vad_detects_speech_start = False
@@ -341,8 +346,8 @@ def vad_worker(
                     # print("submitting final transcription request")
 
                     if enable_early_transcription \
-                        and transcription_resume_event.is_set():
-                        # and final_transcription_worker_is_busy.value:
+                        and transcription_resume_event.is_set() \
+                        and final_transcription_worker_is_busy.value:
 
                         should_keep_queue.put(True) # keep
 
@@ -383,28 +388,22 @@ class Transcriber():
 
         self.language = language
 
-        # if self.model_type == "parakeet":
-        #     # disabling the stupid logging
-        #     from nemo.utils.nemo_logging import Logger
-        #     nemo_logger = Logger()
-        #     nemo_logger.remove_stream_handlers()
-        #     import logging
-        #     logging.getLogger('nemo_logger').setLevel(logging.ERROR)
-        #     logging.disable(logging.CRITICAL)
+        if self.model_type == "parakeet":
+            # disabling the stupid logging
+            from nemo.utils.nemo_logging import Logger
+            nemo_logger = Logger()
+            nemo_logger.remove_stream_handlers()
+            import logging
+            logging.getLogger('nemo_logger').setLevel(logging.ERROR)
+            logging.disable(logging.CRITICAL)
 
-        #     import nemo.collections.asr as nemo_asr
-        #     self.model = nemo_asr.models.ASRModel.from_pretrained(model_name="nvidia/parakeet-tdt-0.6b-v3")
-        # else: 
-
-        # whisper
-        from faster_whisper import WhisperModel
-        self.model = WhisperModel(self.model_type, device=self.device, compute_type=self.compute_type)
-
-        # import nemo.collections.asr as nemo_asr
-        # self.model = nemo_asr.models.ASRModel.from_pretrained(model_name="nvidia/parakeet-tdt-0.6b-v3")
-
-        # pretty accurate and about 4-5 times faster
-        # self.faster_whisper_model = WhisperModel("distil-small.en", device="cuda", compute_type="float16")
+            import nemo.collections.asr as nemo_asr
+            self.model = nemo_asr.models.ASRModel.from_pretrained(model_name="nvidia/parakeet-tdt-0.6b-v3")
+            # self.model = self.model.to(self.device)
+        else: 
+            # whisper
+            from faster_whisper import WhisperModel
+            self.model = WhisperModel(self.model_type, device=self.device, compute_type=self.compute_type)
 
 
     def transcribe(self, speech_chunks: list[bytes]) -> str:
@@ -412,18 +411,15 @@ class Transcriber():
 
         speech_chunks_float32: np.ndarray = int16_bytes_list_to_normalized_float32_ndarray(speech_chunks)
 
-        # if self.model_type == "parakeet":
-        #     print("starting transcription...")
-        #     write_to_wav_file("audio-to-transcribe.wav", speech_chunks, 1, 16000)
-        #     transcribed_text = self.model.transcribe(["audio-to-transcribe.wav"], verbose=False)[0].text
-        #     print("done transcribing")
-        # else: 
+        if self.model_type == "parakeet":
+            transcribed_text = self.model.transcribe([speech_chunks_float32], verbose=False)[0].text
+        else: 
 
-        # whisper
-        segments, info = self.model.transcribe(speech_chunks_float32, language=self.language, condition_on_previous_text=False)
+            # whisper
+            segments, info = self.model.transcribe(speech_chunks_float32, language=self.language, condition_on_previous_text=False)
 
-        for segment in segments:
-            transcribed_text += segment.text
+            for segment in segments:
+                transcribed_text += segment.text
 
         return transcribed_text
 
@@ -503,10 +499,19 @@ class Recorder():
         self.transcriber_device = transcriber_device
         self.vad_device = vad_device
 
-        TranscriberThreadType: Union[threading.Thread, mp.Process] = threading.Thread
-        if transcriber_device == "cpu":
-            TranscriberThreadType = mp.Process
+        if transcriber_device == "cpu" \
+            and (transcriber_model_type == "parakeet" or realtime_transcriber_model_type == "parakeet"):
+            raise Exception("Argument Error: parakeet is not compatible with cpu.")
 
+
+        FinalTranscriberThreadType: Union[threading.Thread, mp.Process] = threading.Thread
+        if transcriber_device == "cpu" or transcriber_model_type == "parakeet":
+            FinalTranscriberThreadType = mp.Process
+
+        RealtimeTranscriberThreadType: Union[threading.Thread, mp.Process] = threading.Thread
+        if transcriber_device == "cpu" or realtime_transcriber_model_type == "parakeet":
+            RealtimeTranscriberThreadType = mp.Process
+        
         # when we first detect speech, it's only after a few ms of speech is said, and we need to add that to the buffer
         self.pre_audio_chunks_rolling_buffer: collections.deque[list[bytes]] = collections.deque(
             maxlen=self.pre_audio_chunk_buffer_size
@@ -574,8 +579,7 @@ class Recorder():
             daemon=True,
         )
 
-        self.final_transcription_worker = TranscriberThreadType(**final_transcription_worker_args).start()
-
+        self.final_transcription_worker = FinalTranscriberThreadType(**final_transcription_worker_args).start()
 
         self.time_taken_to_realtime_transcribe = mp.Value('d', 0.0)
 
@@ -609,7 +613,7 @@ class Recorder():
                 daemon=True,
             )
 
-            self.realtime_transcription_worker = TranscriberThreadType(**realtime_transcription_worker_args).start()
+            self.realtime_transcription_worker = RealtimeTranscriberThreadType(**realtime_transcription_worker_args).start()
 
         self.final_text_handler = threading.Thread(
             target=transcribed_text_handler,
@@ -648,6 +652,7 @@ class Recorder():
             daemon=True,
         )
 
+        # might need to do this for vad_process too, but we'll see...
         if platform.system() == 'Linux':
             self.audio_process = threading.Thread(**audio_process_args)
         else: 
