@@ -198,6 +198,7 @@ def vad_worker(
     audio_queue: mp.Queue,
     vad_device: str,
     pre_audio_chunks_rolling_buffer: collections.deque[list[bytes]],
+    pre_audio_chunk_buffer_duration: float,
     speech_chunks: list[bytes],
     seconds_per_chunk: float,
     sample_rate: int,
@@ -304,6 +305,7 @@ def vad_worker(
                 time_vad_detects_speech_stop = time.time()
 
             seconds_of_speech_stored = len(speech_chunks) * seconds_per_chunk
+            seconds_of_new_speech_stored = seconds_of_speech_stored - pre_audio_chunk_buffer_duration
             
             # submit realtime transcription only when the realtime transcription worker is not already transcribing something
             if enable_realtime_transcription \
@@ -322,7 +324,7 @@ def vad_worker(
                 if vad_detects_speech_stop \
                     and transcription_resume_event.is_set() \
                     and time_since_last_submitted_final_transcription_request > 0.1 \
-                    and seconds_of_speech_stored > min_speech_duration_for_transcription:
+                    and seconds_of_new_speech_stored > min_speech_duration_for_transcription:
 
                     # print("submitting early transcription request")
 
@@ -381,6 +383,20 @@ class Transcriber():
 
         self.language = language
 
+        # if self.model_type == "parakeet":
+        #     # disabling the stupid logging
+        #     from nemo.utils.nemo_logging import Logger
+        #     nemo_logger = Logger()
+        #     nemo_logger.remove_stream_handlers()
+        #     import logging
+        #     logging.getLogger('nemo_logger').setLevel(logging.ERROR)
+        #     logging.disable(logging.CRITICAL)
+
+        #     import nemo.collections.asr as nemo_asr
+        #     self.model = nemo_asr.models.ASRModel.from_pretrained(model_name="nvidia/parakeet-tdt-0.6b-v3")
+        # else: 
+
+        # whisper
         from faster_whisper import WhisperModel
         self.model = WhisperModel(self.model_type, device=self.device, compute_type=self.compute_type)
 
@@ -396,14 +412,19 @@ class Transcriber():
 
         speech_chunks_float32: np.ndarray = int16_bytes_list_to_normalized_float32_ndarray(speech_chunks)
 
-        # return self.model.transcribe(speech_chunks_float32)[0].text
+        # if self.model_type == "parakeet":
+        #     print("starting transcription...")
+        #     write_to_wav_file("audio-to-transcribe.wav", speech_chunks, 1, 16000)
+        #     transcribed_text = self.model.transcribe(["audio-to-transcribe.wav"], verbose=False)[0].text
+        #     print("done transcribing")
+        # else: 
 
-
-        # segments, info = self.faster_whisper_model.transcribe(speech_chunks_float32, language=self.language, condition_on_previous_text=True)
+        # whisper
         segments, info = self.model.transcribe(speech_chunks_float32, language=self.language, condition_on_previous_text=False)
 
         for segment in segments:
             transcribed_text += segment.text
+
         return transcribed_text
 
 class Recorder():
@@ -471,7 +492,7 @@ class Recorder():
 
         self.speech_prob_threshold = speech_prob_threshold
         self.min_speech_duration_for_transcription = min_speech_duration_for_transcription
-        self.pre_audio_chunk_buffer_duration = pre_audio_chunk_buffer_duration,
+        self.pre_audio_chunk_buffer_duration = pre_audio_chunk_buffer_duration
 
         self.pre_audio_chunk_buffer_size = int(pre_audio_chunk_buffer_duration * self.CHUNKS_PER_SECOND) # max num chunks
 
@@ -643,6 +664,7 @@ class Recorder():
                 self.audio_queue,
                 self.vad_device,
                 self.pre_audio_chunks_rolling_buffer,
+                self.pre_audio_chunk_buffer_duration,
                 self.speech_chunks,
                 self.SECONDS_PER_CHUNK,
                 self.SAMPLE_RATE,
