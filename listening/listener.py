@@ -39,6 +39,7 @@ CHUNK_MS      = CHUNK_FRAMES * 1000 // SAMPLE_RATE   # 32
 
 BUFFER_CHUNKS = 800  // CHUNK_MS   # pre-speech ring buffer: ~800ms = 25 chunks
 GAP_CHUNKS    = 640  // CHUNK_MS   # silence → end of speech: ~640ms = 20 chunks
+SPEC_CHUNKS   = 160  // CHUNK_MS   # silence → speculative transcribe: ~160ms = 5 chunks
 
 
 def _preprocess(text: str) -> str:
@@ -74,6 +75,15 @@ class SpeechListener:
     gap_chunks : int
         Consecutive silent chunks before speech is considered finished.
         Default GAP_CHUNKS (~640ms). Reduce for snappier endpointing.
+    speculative : bool
+        Transcribe early, after spec_chunks of silence, instead of waiting out
+        the full gap. The audio in between is silence by definition, so the
+        early result is normally identical — it just arrives sooner. If speech
+        resumes, the speculative result is discarded and the utterance is
+        transcribed again in full. Costs one extra transcription per false
+        endpoint; set False on a CPU-bound host.
+    spec_chunks : int
+        Silent chunks before speculating. Default SPEC_CHUNKS (~160ms).
     """
 
     def __init__(
@@ -86,12 +96,16 @@ class SpeechListener:
         device=None,
         speech_threshold=0.5,
         gap_chunks=GAP_CHUNKS,
+        speculative=True,
+        spec_chunks=SPEC_CHUNKS,
     ):
         self._on_transcription = on_transcription
         self._on_realtime      = on_realtime
         self._language         = language
         self._threshold        = speech_threshold
         self._gap_chunks       = gap_chunks
+        self._speculative      = speculative
+        self._spec_chunks      = min(spec_chunks, gap_chunks)
         self._stop             = threading.Event()
 
         # Device
@@ -121,8 +135,16 @@ class SpeechListener:
         self._speech_chunks: list[bytes] = []
         self._speaking     = False
         self._gap_count    = 0
+        # Bumped whenever speech resumes or an utterance ends, so a speculative
+        # transcript from a superseded moment can be recognised and dropped.
+        self._epoch        = 0
+        self._spec_sent    = False
 
-        # Work queues (bytes chunks)
+        # Per-utterance stage timings, refreshed just before on_transcription
+        # fires. Safe to read from that callback — one worker thread writes it.
+        self.last_timing: dict = {}
+
+        # Work queues ((chunks, t_speech_end) tuples)
         self._final_q    = queue.Queue()
         self._realtime_q = queue.Queue(maxsize=1)   # drop if worker is busy
 
@@ -146,14 +168,54 @@ class SpeechListener:
     # ── Worker threads ─────────────────────────────────────────────────────────
 
     def _transcription_worker(self):
+        # Result of the most recent speculative pass, valid only for its epoch.
+        spec_epoch, spec_text, spec_stt = None, None, 0.0
+
         while not self._stop.is_set():
             try:
-                chunks = self._final_q.get(timeout=0.1)
+                kind, epoch, chunks, t_end = self._final_q.get(timeout=0.1)
             except queue.Empty:
                 continue
-            text = _preprocess(self._transcribe(chunks))
-            if text:
+
+            # Speculative pass: transcribe now, hold the result for the endpoint.
+            if kind == "spec":
+                t0 = time.time()
+                spec_text  = _preprocess(self._transcribe(chunks))
+                spec_stt   = time.time() - t0
+                spec_epoch = epoch
+                continue
+
+            t_pickup = time.time()
+            if epoch == spec_epoch:
+                # No speech since we speculated — the extra audio was silence,
+                # so that transcript still stands. Nothing to compute.
+                text, speculative = spec_text, True
+            else:
+                text, speculative = _preprocess(self._transcribe(chunks)), False
+            t_done = time.time()
+            spec_epoch, spec_text = None, None
+
+            self.last_timing = {
+                # Audio captured, including pre-roll buffer and trailing silence.
+                "speech_dur": len(chunks) * CHUNK_MS / 1000,
+                # Fixed cost of deciding speech ended — floor on responsiveness.
+                "vad_gap":    self._gap_chunks * CHUNK_MS / 1000,
+                # Backlog: >0 means the previous turn was still being handled.
+                "q_wait":     t_pickup - t_end,
+                "stt":        t_done - t_pickup,
+                # True when the transcript came free from the gap.
+                "speculative": speculative,
+                "t_speech_end": t_end,
+            }
+
+            if not text:
+                continue
+            try:
                 self._on_transcription(text)
+            except Exception as e:
+                # A failing callback must not kill this thread — the mic would
+                # stay open and the listener would go silently deaf.
+                print(f"[listener] on_transcription raised: {e!r}")
 
     def _realtime_worker(self):
         while not self._stop.is_set():
@@ -164,7 +226,10 @@ class SpeechListener:
             if self._realtime_model and self._on_realtime:
                 text = _preprocess(self._transcribe(chunks, self._realtime_model))
                 if text:
-                    self._on_realtime(text)
+                    try:
+                        self._on_realtime(text)
+                    except Exception as e:
+                        print(f"[listener] on_realtime raised: {e!r}")
 
     # ── PyAudio callback (runs in its own thread) ──────────────────────────────
 
@@ -186,17 +251,34 @@ class SpeechListener:
                 self._speech_chunks = list(self._pre_buffer)
                 self._speaking  = True
                 self._gap_count = 0
+                self._spec_sent = False
         else:
             self._speech_chunks.append(in_data)
 
             if is_speech:
+                if self._gap_count:
+                    # Resumed mid-pause: anything already speculated is stale.
+                    self._epoch += 1
+                    self._spec_sent = False
                 self._gap_count = 0
             else:
                 self._gap_count += 1
+
+                # Speculate well before the endpoint, so transcription runs
+                # inside the gap instead of after it.
+                if (self._speculative and not self._spec_sent
+                        and self._gap_count == self._spec_chunks):
+                    self._spec_sent = True
+                    self._final_q.put(
+                        ("spec", self._epoch, list(self._speech_chunks), time.time())
+                    )
+
                 if self._gap_count >= self._gap_chunks:
                     # Speech ended
                     chunks = list(self._speech_chunks)
-                    self._final_q.put(chunks)
+                    self._final_q.put(("final", self._epoch, chunks, time.time()))
+                    self._epoch += 1
+                    self._spec_sent = False
 
                     # Drop any stale realtime work
                     try:
@@ -257,7 +339,10 @@ class SpeechListener:
 
 if __name__ == "__main__":
     def on_text(text):
-        print(f"\n>>> {text}\n")
+        m = listener.last_timing
+        print(f"\n>>> {text}")
+        print(f"    [timing] speech {m['speech_dur']:.1f}s  vad_gap {m['vad_gap']:.2f}s  "
+              f"q_wait {m['q_wait']:.2f}s  stt {m['stt']:.2f}s\n")
 
     def on_realtime(text):
         print(f"\r... {text}", end="", flush=True)

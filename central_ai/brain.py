@@ -23,7 +23,8 @@ Usage:
 """
 
 import json
-from typing import Optional
+import re
+from typing import Iterator, Optional
 
 import requests
 
@@ -69,6 +70,83 @@ GLADOS_SYSTEM = (
 )
 
 
+# ── Incremental JSON parsing ───────────────────────────────────────────────────
+# "speech" is the FIRST field in the schema, so while the model is still writing
+# gesture/look_at/mood we can already read the words it wants said. That is what
+# makes speaking before generation finishes possible.
+
+# A sentence ends at .!? plus any closing quote/bracket, then whitespace or EOS.
+_SENTENCE_END = re.compile(r'[.!?]["\')\]]*(?:\s|$)')
+
+
+def extract_speech(raw: str) -> tuple[Optional[str], bool]:
+    """
+    Pull the "speech" value out of a possibly-incomplete JSON stream.
+
+    Returns (text, complete). text is None until the opening quote arrives.
+    complete is True once the closing quote has been seen.
+    """
+    i = raw.find('"speech"')
+    if i == -1:
+        return None, False
+    j = raw.find(":", i + len('"speech"'))
+    if j == -1:
+        return None, False
+    k = raw.find('"', j + 1)
+    if k == -1:
+        return None, False
+
+    # Walk for the closing quote, respecting backslash escapes.
+    esc = False
+    for idx in range(k + 1, len(raw)):
+        c = raw[idx]
+        if esc:
+            esc = False
+        elif c == "\\":
+            esc = True
+        elif c == '"':
+            try:
+                return json.loads(raw[k:idx + 1]), True
+            except json.JSONDecodeError:
+                return None, False
+
+    # Still open. Close it ourselves and let json handle the escapes. Trailing
+    # partial escapes (a lone backslash, a half-written \uXXXX) won't parse, so
+    # shave characters until it does — the next token will complete them.
+    frag = raw[k:]
+    while len(frag) > 1:
+        try:
+            return json.loads(frag + '"'), False
+        except json.JSONDecodeError:
+            frag = frag[:-1]
+    return "", False
+
+
+def _sse_delta(line: str) -> str:
+    """Content fragment from one OpenAI-style SSE line ("" if it carries none)."""
+    if not line:
+        return ""
+    if line.startswith("data:"):
+        line = line[len("data:"):].strip()
+    if not line or line == "[DONE]":
+        return ""
+    try:
+        choices = json.loads(line).get("choices") or [{}]
+    except json.JSONDecodeError:
+        return ""
+    c = choices[0]
+    # llama.cpp sends "delta" while streaming; some servers send "message".
+    return (c.get("delta") or c.get("message") or {}).get("content") or ""
+
+
+def split_sentence(pending: str) -> tuple[str, str]:
+    """Split off the first complete sentence. Returns (sentence, remainder)."""
+    m = _SENTENCE_END.search(pending)
+    if not m:
+        return "", pending
+    return pending[:m.end()], pending[m.end():]
+
+
 class GladosBrain:
     """
     Stateful GLaDOS brain. Maintains conversation history across turns.
@@ -97,33 +175,100 @@ class GladosBrain:
         self._temperature = temperature
         self._timeout     = timeout
         self._history: list[dict] = []
+        # Parsed dict from the most recent turn (gesture / look_at / mood).
+        self.last_response: Optional[dict] = None
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
+    def respond_stream(self, user_text: str) -> Iterator[str]:
+        """
+        Stream the reply, yielding each complete sentence of speech as soon as
+        it has been generated — long before gesture/look_at/mood arrive.
+
+        Yield sentences straight to TTS to start speaking mid-generation:
+
+            for sentence in brain.respond_stream(text):
+                dispatch_speech(sentence)
+            full = brain.last_response      # gesture / look_at / mood
+
+        After the generator is exhausted, `last_response` holds the parsed dict
+        (None if the server failed or the JSON was malformed).
+        """
+        self.last_response = None
+        self._history.append({"role": "user", "content": user_text})
+        self._trim_history()
+        messages = [{"role": "system", "content": GLADOS_SYSTEM}] + self._history
+
+        raw      = ""
+        consumed = 0   # chars of speech already yielded
+
+        try:
+            with requests.post(
+                self._url,
+                json={
+                    "messages":    messages,
+                    "temperature": self._temperature,
+                    "stream":      True,
+                },
+                stream=True,
+                timeout=self._timeout,
+            ) as r:
+                r.raise_for_status()
+                for line in r.iter_lines(decode_unicode=True):
+                    delta = _sse_delta(line)
+                    if not delta:
+                        continue
+                    raw += delta
+
+                    speech, _ = extract_speech(raw)
+                    if speech is None:
+                        continue
+
+                    pending = speech[consumed:]
+                    while True:
+                        sentence, pending = split_sentence(pending)
+                        if not sentence:
+                            break
+                        consumed += len(sentence)
+                        if sentence.strip():
+                            yield sentence.strip()
+
+        except requests.exceptions.ConnectionError:
+            print("[brain] llama.cpp server not running. Start it with:")
+            print("  llama-server -m central_ai/benchmarking_tools/Bonsai-8B-Q1_0.gguf --port 8080")
+            self._history.pop()
+            return
+        except Exception as e:
+            print(f"[brain] error: {e}")
+            self._history.pop()
+            return
+
+        if not raw:
+            self._history.pop()
+            return
+
+        # Flush a trailing fragment the model never punctuated.
+        speech, _ = extract_speech(raw)
+        if speech and consumed < len(speech):
+            tail = speech[consumed:].strip()
+            if tail:
+                yield tail
+
+        # Record what was actually said, so the model sees its own formatting.
+        self._history.append({"role": "assistant", "content": raw})
+        self.last_response = self._parse(raw)
+        if self.last_response is None:
+            print(f"[brain] JSON parse failed. raw: {raw[:200]}")
+
     def respond(self, user_text: str) -> Optional[dict]:
         """
-        Send user_text to the brain and return a parsed response dict.
+        Blocking variant — waits for the whole reply and returns the parsed dict.
 
         Returns None if the server is unreachable or the response can't be parsed.
         """
-        self._history.append({"role": "user", "content": user_text})
-        self._trim_history()
-
-        messages = [{"role": "system", "content": GLADOS_SYSTEM}] + self._history
-
-        raw = self._call(messages)
-        if raw is None:
-            self._history.pop()   # undo the user message if we got nothing back
-            return None
-
-        parsed = self._parse(raw)
-        # Add assistant turn to history regardless — so the model knows what it said
-        self._history.append({"role": "assistant", "content": raw})
-
-        if parsed is None:
-            print(f"[brain] JSON parse failed. raw: {raw[:200]}")
-
-        return parsed
+        for _ in self.respond_stream(user_text):
+            pass
+        return self.last_response
 
     def reset(self):
         """Clear conversation history (start a new conversation)."""

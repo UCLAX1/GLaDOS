@@ -24,6 +24,16 @@ python3 run_glados.py
 
 Speak into the mic. glados responds with audio and a MuJoCo gesture.
 
+The pipeline is streamed end to end — each stage starts before the previous one
+finishes, so the reply begins while the model is still writing it:
+
+- the listener transcribes **during** the VAD gap rather than after it
+- the brain yields each sentence as it is generated, ahead of gesture/mood
+- the daemon speaks each sentence as it lands, segment by segment
+
+Every stage is timed. Each turn prints its breakdown, and Ctrl-C prints a
+per-stage distribution over the session.
+
 ## Structure
 
 ```
@@ -38,7 +48,8 @@ run_glados.py           full pipeline entry point
 │
 ├── speech/
 │   ├── glados_tts.py   Kokoro TTS inference (auto-downloads weights from HF)
-│   ├── glados_daemon.py    speech daemon — load once, speak on demand via JSON
+│   ├── glados_daemon.py    speech daemon — load once, speak on demand
+│   ├── speech_queue.py     atomic utterance queue shared with the pipeline
 │   └── voice_training/     training pipeline for the GLaDOS voice model
 │
 ├── actions/
