@@ -15,27 +15,18 @@ from control.control_interface import ControlInterface
 
 class MujocoControl(ControlInterface):
 
+    # Actuator index in data.ctrl — must match order in glados.xml
+    _INDEX = {
+        "main_swivel": 0,
+        "lower_arm":   1,
+        "tilt":        2,
+        "nod":         3,
+        "eye":         4,
+    }
+
     def __init__(self, model: mujoco.MjModel, data: mujoco.MjData) -> None:
         self.model = model
         self.data  = data
-
-        self._act  = {}   # joint name → actuator index (for data.ctrl)
-        self._qpos = {}   # joint name → qpos address  (for data.qpos)
-
-        # glados.xml names actuators/joints as "{name}_actuator" / "{name}_joint"
-        # Joints not yet modelled (e.g. tilt/nod/eye while head is WIP) are
-        # silently skipped so actions that only use available joints still run.
-        missing = []
-        for name in self.LIMITS:
-            aid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{name}_actuator")
-            jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT,    f"{name}_joint")
-            if aid == -1 or jid == -1:
-                missing.append(name)
-                continue
-            self._act[name]  = aid
-            self._qpos[name] = model.jnt_qposadr[jid]
-        if missing:
-            print(f"[sim] joints not in model (skipped): {missing}")
 
     # ── ControlInterface implementation ────────────────────────────────────────
 
@@ -45,14 +36,16 @@ class MujocoControl(ControlInterface):
 
         Converts degrees → radians for rotation joints, mm → meters for eye.
         """
+        ctrl = self.data.ctrl.copy()
+
         for joint, value in joints.items():
-            if joint not in self._act:
-                continue   # joint not in model yet
-            idx = self._act[joint]
+            idx = self._INDEX[joint]
             if joint == "eye":
-                self.data.ctrl[idx] = value / 1000.0        # mm → m
+                ctrl[idx] = value / 1000.0           # mm → m
             else:
-                self.data.ctrl[idx] = math.radians(value)   # deg → rad
+                ctrl[idx] = math.radians(value)      # deg → rad
+
+        self.data.ctrl[:] = ctrl                     # single write
 
 
     def get_position(self, joint: str) -> float:
@@ -61,10 +54,12 @@ class MujocoControl(ControlInterface):
 
         Returns degrees for rotation joints, mm for the eye. Raises ValueError for unknown joint names.
         """
-        if joint not in self._qpos:
-            return 0.0   # joint not in model yet; report neutral
-
-        idx = self._qpos[joint]
+        if joint not in self._INDEX:
+            raise ValueError(
+                f"Unknown joint {joint!r}. Valid joints: {list(self._INDEX)}"
+            )
+        
+        idx = self._INDEX[joint]
         raw = self.data.qpos[idx]
         if joint == "eye":
             return raw * 1000.0                      # m → mm
@@ -72,5 +67,5 @@ class MujocoControl(ControlInterface):
             return math.degrees(raw)                 # rad → deg
 
     def shutdown(self) -> None:
-        """No-op — sim has no motors to power down."""
+        """Stop moving for sim"""
         pass
