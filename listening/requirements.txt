@@ -1,0 +1,10 @@
+silero-vad
+SpeechRecognition
+faster-whisper
+matplotlib
+numpy
+pyaudio
+rich
+torch
+torchaudio
+soundfile

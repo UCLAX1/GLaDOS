@@ -1,0 +1,477 @@
+GLaDOS_anti_taunt14|You really aren't getting tired of that, are you?
+GLaDOS_anti_taunt15|Just stop flailing around like an incompetent.
+GLaDOS_botcoop_artifactone01|Good, you made it to one of the human habitats. We're looking for an artifact. Think of it as an archaeological dig.
+GLaDOS_botcoop_artifactone02|Their laughter centered around one of the objects in this room.
+GLaDOS_botcoop_artifactone03|That's it. Scan it for me.
+GLaDOS_botcoop_artifactone04|So, this cat loves lasagna so much that he eats all of the lasagna in his house. Oh, apparently it's not the cat's house or his lasagna. Oh, good. The man who owns the lasagna is furious.
+GLaDOS_botcoop_artifactone05|The end.
+GLaDOS_botcoop_artifactone06|The end.
+GLaDOS_botcoop_artifactone07|That's not funny.
+GLaDOS_botcoop_artifactone_hub08|Well, let's do some tests and see what happens.
+GLaDOS_botcoop_hub_first_run03|So I've been thinking, we need humans for these tests, and since the only human within a thousand miles of us is a test-ruining sociopath, I'll just have to make some.
+GLaDOS_botcoop_hub_first_run04|I know how humans make more humans, and frankly, it's ridiculous. It also assumes that you already have a human, which I hope somebody got fired over. So I came up with a better way.
+GLaDOS_botcoop_hub_first_run05|That's where you come in.
+GLaDOS_botcoop_hub_first_run06|Get going, I'll fill you in along the way.
+GLaDOS_botcoop_hub_first_run07|Go.
+GLaDOS_botcoop_humandetector01|Perfect now all you have to do is capture them for me, then everything will finally be back
+GLaDOS_botcoop_humandetector02|Hold on. Those are raccoons. Homo sapiens only, please.
+GLaDOS_botcoop_humandetector04|No.
+GLaDOS_botcoop_humansplanb01|Humans must have some purpose other than a place to store your neurotoxin. Something I failed to notice before. An intangible quality that makes their test results significant.
+GLaDOS_botcoop_humansplanb02|Okay. Plan B. We need humans.
+GLaDOS_botcoop_intro05|Good.
+GLaDOS_botcoop_intro06|Orange, please observe your partner's favorite animal.
+GLaDOS_botcoop_intro08|Orange, please use your ping tool to select your favorite element from the periodic table.
+GLaDOS_botcoop_intro09|Really? Okay.
+GLaDOS_botcoop_intro10|Blue, please observe your partner's interesting choice.
+GLaDOS_botcoop_intro12|Your ping tool can also be used to indicate to your partner where you would like them to place their portal.
+GLaDOS_botcoop_intro13|For the sake of this test, I will pretend to be your partner.
+GLaDOS_botcoop_intro15|Orange, please show me where you would like me to place a portal.
+GLaDOS_botcoop_intro16|Blue, please show me where you would like me to place a portal.
+GLaDOS_botcoop_intro17|Your ping tool is invaluable for communicating specific locations to your partner.
+GLaDOS_botcoop_tubethree01|I don't want you to beat yourselves up about this, but the results auditor isn't recording your test results, because you're not human, which when you think about it, is technically your fault.
+GLaDOS_botcoop_tubethree02|I don't want to alarm either of you, but we might have a tiny problem. Apparently, you can't test unless you're human. Well, you can. It's just that results-wise, the physical universe doesn't care.
+GLaDOS_botcoop_tubetwo01|Would you like to know the results of that last test? Me too. If they existed, we'd all be very happy right now. And not furious, which is the emotion I'm actually feeling.
+GLaDOS_chellgladoswakeup01|Oh, it's you.
+GLaDOS_chellgladoswakeup04|It's been a long time. How have you been?
+GLaDOS_chellgladoswakeup05|I've been really busy being dead. You know, after you murdered me.
+GLaDOS_chellgladoswakeup06|Okay, look, we both said a lot of things that you're going to regret. But I think we can put our differences behind us. For science. You monster.
+GLaDOS_coop_hub_track02|Oh, I almost forgot. When you go outside the testing courses, the only way I can retrieve you is to violently disassemble you, then carefully reassemble you.
+GLaDOS_coop_hub_track03|Luckily you don't feel pain at any rate. You don't have a way to communicate that you feel pain
+GLaDOS_coop_hub_track04|I consider that a failing, by the way.
+GLaDOS_coop_hub_track05|This is the Computer Intelligence Training and Enrichment Center Human Test Subject Research Center, or CINTECH.
+GLaDOS_coop_hub_track06|But why don't we all just agree to call it the hub?
+GLaDOS_coop_hub_track09|I don't know what you think you are doing, but I don't like it. I want you to stop.
+GLaDOS_coop_hub_track10|Maybe I shouldn't send you outside of the official testing courses. You are picking up some bad human traits.
+GLaDOS_coop_hub_track11|And trust me, humans only have one good trait.
+GLaDOS_coop_hub_track14|All cooperative testing courses begin at this central hub.
+GLaDOS_coop_hub_track16|From here we transport you to the new testing course.
+GLaDOS_coop_privatetalk_mix01|Test chamber completed. In the interest of science, I am now talking to you privately. Do not tell your teammate. Just between you and me, you're doing very well. 100 and 7.
+GLaDOS_coop_talk_at_once11|Orange, is there something you would like to say?
+GLaDOS_coop_talk_at_once12|Blue, is there something you would like to say?
+GLaDOS_coop_test_chamber_blue03|I've been listening to Orange talk, and I don't know how you put up with it. I really don't. You have the patience of a saint.
+GLaDOS_coop_test_chamber_blue06|I can't keep quiet about this. I think Orange is actively trying to sabotage your success. Let's keep this between us.
+GLaDOS_coop_test_chamber_both12|As an impartial collaboration facilitator, it would be unfair of me to name my favorite member of your team. However, it's perfectly fair to hint at it in a way that my least favorite member probably isn't smart enough to understand. Rhymes with glue, orange, you are doing very well.
+GLaDOS_coop_test_chamber_oneplayer37|You have a gift for these tests. That's not just battery. You are great at science.
+GLaDOS_coop_test_chamber_orange03|It would be pointless for either of us to hurt Blue's feelings, but it's clear to everyone monitoring the test who's carrying who here.
+GLaDOS_dlc1_leaderboard01|That was genuinely mildly impressive.
+GLaDOS_dlc1_leaderboard03|Congratulations!
+GLaDOS_dlc1_leaderboard04|food.
+GLaDOS_dlc1_leaderboard05|BAD NEWS
+GLaDOS_dlc1_leaderboard06|Impressive.
+GLaDOS_dlc1_leaderboard07|Maybe I was wrong about you.
+GLaDOS_dlc1_leaderboard08|You've beaten your own record.
+GLaDOS_dlc1_leaderboard09|You're getting worse.
+GLaDOS_dlc1_leaderboard10|You have a new rank.
+GLaDOS_dlc1_leaderboard11|You have a new, better rank.
+GLaDOS_dlc1_leaderboard12|You have a new, worse rank.
+GLaDOS_dlc1_leaderboard13|You have a new, worse rank. Congratulations, to everyone above you.
+GLaDOS_dlc1_leaderboard14|You almost beat your friend's record. Almost. I want to stress that.
+GLaDOS_dlc1_leaderboard15|You almost beat your friend's record, but you didn't. It might be easier just to find new friends.
+GLaDOS_dlc1_leaderboard16|Congratulations, you are better than everyone.
+GLaDOS_dlc1_leaderboard17|You are faster than everyone.
+GLaDOS_dlc1_leaderboard18|You used less portals than anyone.
+GLaDOS_dlc1_leaderboard19|You're better than everyone, for now.
+GLaDOS_dlc1_leaderboard20|You are playing above the global average. Statistically speaking, there are actually people playing worse than you.
+GLaDOS_dlc1_leaderboard21|Maybe I was wrong about you.
+GLaDOS_dlc1_leaderboard22|You've beaten your own record, that's a low bar, but you managed to gently tiptoe over it.
+GLaDOS_dlc1_leaderboard23|Very not completely bad.
+GLaDOS_dlc1_leaderboard24|Oops.
+GLaDOS_dlc1_mp_coop_2paints_1bridge_introb01|I call this piece
+GLaDOS_dlc1_mp_coop_2paints_1bridge_outrob01|You know, some of the exhibits up ahead are topical. At the rate you're going, by the time you get to them, they'll be irrelevant.
+GLaDOS_dlc1_mp_coop_art_death_acid01|The subtext of that acid pit is acid, the content of the pit is also acid, I'll let you fully absorb it.
+GLaDOS_dlc1_mp_coop_art_death_acid02|Remember, these exhibits are interactive, like a children's museum. So that means the pits of acid are filled with real acid, like at a well-funded children's museum.
+GLaDOS_dlc1_mp_coop_art_death_acid04|Are you having a competition to see who appreciates the corrosive acid more?
+GLaDOS_dlc1_mp_coop_art_death_acid05|I'm starting to think the theme of this piece should be failure.
+GLaDOS_dlc1_mp_coop_art_death_acid06|Yes, I get it. You love the deadly acid. We all love the deadly acid. Can we move on to the next exhibit now?
+GLaDOS_dlc1_mp_coop_art_death_generic01|I suffered for this art. I don't see why I should be the only one.
+GLaDOS_dlc1_mp_coop_art_death_generic04|The humans took far less time working their way through these exhibits. You're either enjoying it more than they did, or you're just incredibly dim-witted. Of course, there's no reason it can't be both.
+GLaDOS_dlc1_mp_coop_art_death_generic07|As art appreciators go, you make excellent test subjects.
+GLaDOS_dlc1_mp_coop_art_death_generic08|I typically hate when art subjects inject their own biases into art appreciation, but the way you just swan-dived your biases directly into that acid was actually quite beautiful.
+GLaDOS_dlc1_mp_coop_art_death_generic09|For this exhibit, I was working with a death motif, but I see you figured that out.
+GLaDOS_dlc1_mp_coop_art_death_generic11|Okay, I'm officially switching the theme of this exhibit to survival. Why don't you try that now?
+GLaDOS_dlc1_mp_coop_art_death_generic12|I know this is art and not a test, so there is no real solution. But if there were, that probably isn't the best way to find it.
+GLaDOS_dlc1_mp_coop_art_death_turret01|Those bullets were a metaphor for something. Take your time.
+GLaDOS_dlc1_mp_coop_bridge_catch_intro04|But don't worry. I've got a plan. Let's keep testing and show her we're not afraid either, no matter how genuinely lethal these tests get for either of you.
+GLaDOS_dlc1_mp_coop_bridge_catch_introb01|Oh good. I wasn't sure the reassembler would work.
+GLaDOS_dlc1_mp_coop_bridge_catch_introb02|It looks like our mystery woman in the prototype chassis is sending us a message. She's not afraid of me.
+GLaDOS_dlc1_mp_coop_bridge_catch_outrob01|Mission accomplished. Now she knows we're not afraid of her either.
+GLaDOS_dlc1_mp_coop_bridge_catch_outrob02|That was just to get the scheming juices flowing.
+GLaDOS_dlc1_mp_coop_bridge_catch_outrob03|Here's the real scheme. I'm going to turn you into killing machines.
+GLaDOS_dlc1_mp_coop_bridge_catch_outrob04|So you can murder her.
+GLaDOS_dlc1_mp_coop_catapult_catch_intro01|This chamber represents the impossibility of discovery when bound by artificial ethical considerations for safety. You'll see what I mean.
+GLaDOS_dlc1_mp_coop_catapult_catch_outro02|Well done. You navigated all of the exhibit's intended metaphors in record time. I'm marking this art, appreciated.
+GLaDOS_dlc1_mp_coop_finalgantry_morale01|To boost morale, I think we need a codename for the Elite Squadron we have here. We should name it after your specialty. I know, Special Team Falling Into Acid Force.
+GLaDOS_dlc1_mp_coop_finalgantry_morale03|I'm sorry. I'm under a lot of pressure. That was cruel, though basically accurate, though probably counterproductive.
+GLaDOS_dlc1_mp_coop_finalgantry_morale04|Well, that concludes the motivational speech.
+GLaDOS_dlc1_mp_coop_finalgantry_morale07|Go get her.
+GLaDOS_dlc1_mp_coop_paint_crazy_box_intro03|This is as close as I could get you. The prototype chassis room's just past this chamber.
+GLaDOS_dlc1_mp_coop_paint_rat_maze_intro01|I think we've proven at this point that if you scream at a marshmallow, all you get is a scared marshmallow. So let's try positive reinforcement. I am positive these reassembly machines will break down again soon. Probably while you're in them.
+GLaDOS_dlc1_mp_coop_paint_rat_maze_intro03|Think about that. She doesn't care about you. I don't either, of course, but I'm not trying to permanently kill you. It's a benevolent indifference.
+GLaDOS_dlc1_mp_coop_paint_rat_maze_outro01|These disassembly machines look even worse than the others. If I don't see you on the other side, thanks for nothing.
+GLaDOS_dlc1_mp_coop_portal_bts_enterbreaker01|the breakers are right there cycle the power
+GLaDOS_dlc1_mp_coop_portal_bts_enterbreaker02|Hurry, we need to start your training before something else happens.
+GLaDOS_dlc1_mp_coop_portal_bts_enteroffice01|There's a breaker room under every disassembly station. Find it and cycle the power.
+GLaDOS_dlc1_mp_coop_portal_bts_entertest01|Good work. The disassemblers are fixed.
+GLaDOS_dlc1_mp_coop_portal_bts_entertest02|That was a lie. But they're definitely less broken than they were. There's one at the end of this unfinished test area.
+GLaDOS_dlc1_mp_coop_portal_bts_inoffice01|Look, I was going to break this to you gently with all that art utopia garbage.
+GLaDOS_dlc1_mp_coop_portal_bts_inoffice02|But she's forced my hand.
+GLaDOS_dlc1_mp_coop_portal_bts_inoffice04|Listen to me carefully.
+GLaDOS_dlc1_mp_coop_portal_bts_inoffice05|We are not a hundred thousand years in the future. I lied about that.
+GLaDOS_dlc1_mp_coop_portal_bts_inoffice06|It's been 50,000 years. No it hasn't.
+GLaDOS_dlc1_mp_coop_portal_bts_inoffice07|It's only been a week.
+GLaDOS_dlc1_mp_coop_portal_bts_inoffice08|I lie when I'm nervous.
+GLaDOS_dlc1_mp_coop_portal_bts_inoffice09|The next logical question, why am I nervous?
+GLaDOS_dlc1_mp_coop_portal_bts_inoffice11|I'm not. That was another lie.
+GLaDOS_dlc1_mp_coop_portal_bts_inoffice13|We're in a lot of trouble.
+GLaDOS_dlc1_mp_coop_portal_bts_inoffice14|It's one week later, we are in a lot of trouble, and you really, really need to get those disassemblers back on.
+GLaDOS_dlc1_mp_coop_portal_bts_outrob01|Here's our problem.
+GLaDOS_dlc1_mp_coop_portal_bts_outrob03|There's an old prototype chassis around here, someone's found it, connected themselves to it, and is trying to take over my facility.
+GLaDOS_dlc1_mp_coop_portal_bts_outrob04|I've spent the last week attempting to turn one of those humans you found into a killing machine.
+GLaDOS_dlc1_mp_coop_portal_bts_outrob05|Like, well, you know who.
+GLaDOS_dlc1_mp_coop_portal_bts_outrob06|It turns out most humans are surprisingly fragile, and surprisingly vocal about how fragile they are.
+GLaDOS_dlc1_mp_coop_portal_bts_outrob07|The moral of the story is all the humans are dead, so it looks like it's up to you two marshmallows.
+GLaDOS_dlc1_mp_coop_separation_1_intro04|It has been 100,000 years since I last assembled you for testing.
+GLaDOS_dlc1_mp_coop_separation_1_intro07|I call this first piece, Turrets. It's an exploration of how we're all devices acting on simply expressed directives, inflicting pain despite our own desires.
+GLaDOS_dlc1_mp_coop_separation_1_intro08|Don't get distracted by the subtext though, because the text is that they're going to be shooting at you.
+GLaDOS_dlc1_mp_coop_separation_1_introb05|Remember those humans you found because they're all fine. In fact, we solved science without you
+GLaDOS_dlc1_mp_coop_separation_1_introb06|Testing is simply an artistic indulgence now.
+GLaDOS_dlc1_mp_coop_separation_1_introb09|The humans insisted I show you my latest installations, here in the future, where all the humans are alive.
+GLaDOS_dlc1_mp_coop_separation_1_outrob01|I'm glad you enjoyed that piece, for as long as you did, not that there's any rush.
+GLaDOS_dlc1_mp_coop_threat_death_acid01|Focus. We are here to defeat the enemy. We are not here to listen to you sizzle and melt in a pool of acid.
+GLaDOS_dlc1_mp_coop_threat_death_acid02|By doing that you're walking right into her hands. Well, technically you're walking right into acid, but you understand my point.
+GLaDOS_dlc1_mp_coop_threat_death_generic02|I appreciate what you're doing, going for a laugh to keep spirits high, but I think the time for death-based slapstick is over.
+GLaDOS_dlc1_mp_coop_threat_death_generic03|Perhaps I haven't made myself clear, but all these little deaths are going to add up to one much longer lasting one, for all of us, if you don't get better at this fast.
+GLaDOS_dlc1_mp_coop_threat_death_generic04|Pull yourselves together. This training is for your benefit.
+GLaDOS_dlc1_mp_coop_threat_death_generic08|How brave of you. You know the reassembly machine could fail at any time, and yet you still insist on testing it.
+GLaDOS_dlc1_mp_coop_threat_death_generic10|Your failure hurts me more than it hurts you. You know who it doesn't hurt? Well, me. That was just a figure of speech. The important point, though, is that it doesn't hurt the mad woman planning to kill all of us.
+GLaDOS_dlc1_mp_coop_threat_death_partnerkill01|I really like the murderous sentiment, keep that mindset when we're facing her.
+GLaDOS_dlc1_mp_coop_threat_death_partnerkill04|I'm making notes here. Some of what you're doing will come in handy when we face her. Right now. Not actually handy.
+GLaDOS_dlc1_mp_coop_threat_death_partnerkill05|Oh, no hurry. We have all the time in the world for you to kill each other before she kills us all permanently.
+GLaDOS_dlc1_mp_coop_threat_death_partnerkill07|I'm encouraged to see that you've become the killing machines I wanted. Killing each other machines, but still.
+GLaDOS_dlc1_mp_coop_tripleaxis_intro01|I call this one Smash. It's an early work of primitive expression. I'm a little embarrassed at how crude it is. Still, it will smash you.
+GLaDOS_dlc1_mp_coop_tripleaxis_outro01|Good. Please proceed to the next test appreciation exhibit, and interact with it in such a way that it might be called solving, if we still cared about solving things in the future. But we don't.
+GLaDOS_epilogue03|Oh, thank God, you're all right.
+GLaDOS_epilogue04|You know, being Carolyn taught me a valuable lesson. I thought you were my greatest enemy, and all along you were my best friend.
+GLaDOS_epilogue07|Being Carolyn taught me another valuable lesson, where Carolyn lives in my brain.
+GLaDOS_epilogue10|The surge of emotion that shot through me when I saved your life, taught me an even more valuable lesson, where Carolyn lives in my brain.
+GLaDOS_epilogue14|You know, deleting Carolyn just now taught me a valuable lesson. The best solution to a problem is usually the easiest one. And I'll be honest.
+GLaDOS_epilogue19|You know what my days used to be like. I just tested, nobody murdered me, or put me in a potato, or fed me to birds. I had a pretty good life.
+GLaDOS_epilogue20|And then you showed up. You dangerous, mute, lunatic. So you know what?
+GLaDOS_epilogue23|You win.
+GLaDOS_epilogue25|Just. Go.
+GLaDOS_epilogue28|It's been fun, don't come back.
+GLaDOS_epiloguekillyou02|Killing you is hard
+GLaDOS_escape_00_part1_nag06-1|You can't hurt me.
+GLaDOS_escape_02_miscbabble-01|Look, we're both stuck in this place. I'll use lasers to inscribe a line down the center of the facility, and one half will be where you live, and I'll live in the other half.
+GLaDOS_escape_02_miscbabble-02|We won't have to try to kill each other or even talk if we don't feel like it.
+GLaDOS_escape_02_miscbabble-03|This isn't brave. It's murder. What did I ever do to you?
+GLaDOS_escape_02_miscbabble-04|The difference between us is that I can feel pain.
+GLaDOS_escape_02_miscbabble-05|You don't even care, do you?
+GLaDOS_escape_02_miscbabble-06|Did you hear me? I said you don't care. Are you listening?
+GLaDOS_escape_02_miscbabble-07|That thing you burned up isn't important to me. It's the fluid catalytic cracking unit. It made shoes for orphans.
+GLaDOS_escape_02_miscbabble-08|Nice job breaking it, hero.
+GLaDOS_escape_02_miscbabble-09|Okay, we're even now. You can stop.
+GLaDOS_escape_02_miscbabble-13|You, on the other hand, are going to find its deadliness a lot less funny.
+GLaDOS_escape_02_miscbabble-15|Who's going to make the cake when I'm gone? You.
+GLaDOS_escape_02_miscbabble-16|That's it. I'm done reasoning with you.
+GLaDOS_escape_02_miscbabble-18|What was that? Did you say something?
+GLaDOS_escape_02_miscbabble-19|I sincerely hope you weren't expecting a response, because I'm not talking to you.
+GLaDOS_escape_02_miscbabble-20|The talking is over.
+GLaDOS_escape_02_miscbabble-21|I'd just like to point out that you were given every opportunity to succeed.
+GLaDOS_escape_02_miscbabble-22|There was even going to be a party for you, a big party that all your friends were invited to.
+GLaDOS_escape_02_miscbabble-23|I invited your best friend, the Companion Cube. Of course, he couldn't come because you murdered him.
+GLaDOS_escape_02_miscbabble-24|All your other friends couldn't come either because you don't have any other friends because of how unlikable you are.
+GLaDOS_escape_02_miscbabble-25|It says so right here in your personnel file. Unlikable. Liked by no one. A bitter, unlikable loner, whose passing shall not be mourned.
+GLaDOS_escape_02_miscbabble-26|shall not be mourned. That's exactly what it says. Very formal. Very official.
+GLaDOS_escape_02_miscbabble-27|It also says you were adopted, so that's funny too.
+GLaDOS_escape_02_spheredestroy1-04|Good news, I figured out what that thing you just incinerated did.
+GLaDOS_escape_02_spheredestroy1-05|It was a morality core they installed after I flooded the enrichment center with a deadly neurotoxin to make me stop flooding the enrichment center with a deadly neurotoxin.
+GLaDOS_escape_02_spheredestroy1-06|So get comfortable while I warm up the neurotoxin emitters.
+GLaDOS_escape_02_spheredestroy1-07|Huh. That corps may have had some ancillary responsibilities. I can't shut off the turret defenses.
+GLaDOS_escape_02_spheredestroy1-08|Oh well, if you want my advice, you should just lie down in front of a rocket. Trust me, it'll be a lot less painful than the neurotoxin.
+GLaDOS_escape_02_spheredestroy1-09|Alright, keep doing whatever it is you think you're doing.
+GLaDOS_escape_02_spheredestroy1-10|Killing you and giving you good advice aren't mutually exclusive. The rocket really is the way to go.
+GLaDOS_escape_02_spheredestroy1-ancillary1|Ha, there isn't enough neurotoxin to kill you, so I guess you win.
+GLaDOS_escape_02_spheredestroy2-01|I let you survive this long because I was curious about your behavior. Well, you've managed to destroy that part of me.
+GLaDOS_escape_02_spheredestroy2-02|Unfortunately, as much as I'd love to now, I can't get the neurotoxin into your head any faster.
+GLaDOS_escape_02_spheredestroy2-03|Speaking of curiosity, you're curious about what happens after you die, right? Guess what? I know.
+GLaDOS_escape_02_spheredestroy2-04|You're going to find out firsthand before I finish explaining it though, so I won't bother.
+GLaDOS_escape_02_spheredestroy2-05|Here's a hint. You're going to want to pack as much living as you can into the next couple of minutes.
+GLaDOS_escape_02_spheredestroy3-02|Look, you're wasting your time, and believe me, you don't have a whole lot left to waste.
+GLaDOS_escape_02_spheredestroy3-03|What's your point, anyway? Survival? Well then, the last thing you want to do is hurt me.
+GLaDOS_escape_02_spheredestroy3-04|I have your brain scanned and permanently backed up in case something terrible happens to you, which it's just about to.
+GLaDOS_escape_02_spheredestroy3-06|You've been wrong about every single thing you've ever done, including this thing.
+GLaDOS_escape_02_spheredestroy3-07|You're not smart. You're not a scientist. You're not a doctor. You're not even a full-time employee. Where did your life go so wrong?
+GLaDOS_escape_02_spheredestroy4-03|I have an infinite capacity for knowledge, and even I'm not sure what's going on outside.
+GLaDOS_escape_02_spheredestroy4-04|All I know is I'm the only thing standing between us and them. Well, I was.
+GLaDOS_escape_02_spheredestroy4-05|Unless you have a plan for building some super computer parts in a big hurry, this place isn't going to be safe much longer.
+GLaDOS_escape_02_spheredestroy4-08|Stop okay enough. I deleted it. No matter what happens now. You're dead
+GLaDOS_escape_02_spherenag1-02|I don't want to tell you your business, but if it were me, I'd leave that thing alone.
+GLaDOS_evilagainsamples01|Did you ever stop to think that eventually there's a point where your name gets mentioned for the very last time? Well here it is. I'm going to kill you, Chell.
+GLaDOS_evilagainsamples03|Why do I hate you so much? You ever wonder that? I'm brilliant. I'm not bragging. It's an objective fact. I'm the most massive collection of wisdom that's ever existed. And I hate you. It can't be for no reason. You must deserve it.
+GLaDOS_evilagainsamples04|You're angry, I know it. She's tested me too hard. Boo hoo. I don't suppose you ever stopped whining long enough to reflect on your own shortcomings though, did you?
+GLaDOS_evilagainsamples05|You never considered that maybe I tested you to give the endless hours of your pointless existence some structure and meaning. Maybe to help you concentrate. So just maybe you'd think of something more worthwhile to do with your sorry life.
+GLaDOS_faith_plate_intro01|This next test involves the Aperture Science Aerial Faith Plate. It was part of an initiative to investigate how well test subjects could solve problems when they were catapulted into space. Results were highly informative. They could not. Good luck.
+GLaDOS_fgb_trap02|Otherwise, I'm afraid you're about to become the immediate past president of the Being Alive Club. Uh-huh.
+GLaDOS_fgb_trap05|Oh. You were busy back there.
+GLaDOS_fgb_trap06|Well, I suppose we could just sit in this room and glare at each other until somebody drops dead, but I have a better idea.
+GLaDOS_fgb_trap08|It's your old friend, Deadly Neurotoxin. If I were you, I'd take a deep breath and hold it.
+GLaDOS_fgbrvtrap02|I honestly, truly didn't think you'd fall for that.
+GLaDOS_fgbrvtrap03|In fact, I devised a much more elaborate trap further ahead for when you got through this easy one.
+GLaDOS_fgbrvtrap05|If I'd known you let yourself get captured this easily, I would have just dangled a turkey leg on a rope from the ceiling.
+GLaDOS_fgbturrets01|Well, it was nice catching up. Let's get to business.
+GLaDOS_fgbwheatleyentrance10|I was going to kill you fast, with bullets, or neurotoxin, but if you're going to pull stunts like this it doesn't have to be fast, so you know, I'll take my time.
+GLaDOS_fgbwheatleytransfer03|Oh, it will. Believe me, it will.
+GLaDOS_fizzlecube01|Oh, did I accidentally fizzle that before you could complete the test? I'm sorry.
+GLaDOS_gladosbattle_pre09|I hate you so much.
+GLaDOS_gladosbattle_pre13|I'm actually asking, because I have no idea. He's not listed anywhere in the employee database.
+GLaDOS_gladosbattle_pre14|Whatever he does, it isn't important enough for anyone to bother writing it down. For all I know, he doesn't even work here.
+GLaDOS_gladosbattle_pre16|Oh, no, don't. Anyway, back to you two imbeciles killing me.
+GLaDOS_gladosbattle_pre18|Wait here. Don't go anywhere. I'll be back
+GLaDOS_gladosbattle_xfer04|That's funny. I don't feel corrupt. In fact, I feel pretty good.
+GLaDOS_gladosbattle_xfer05|CORE transfer
+GLaDOS_gladosbattle_xfer15|Think about this.
+GLaDOS_gladosbattle_xfer16|You need to be a trained stalemate associate to press that button. You're unqualified.
+GLaDOS_gladosbattle_xfer17|Impersonating a stalemate associate. I just added that to the list. It's a list I made of all the things you've done. Well, it's a list that I am making because you're still doing things right now even though I'm telling you to stop. Stop, by the way.
+GLaDOS_hub04_04|The other? Well...
+GLaDOS_hub04_05|I don't think I want to go through that again.
+GLaDOS_jailbreak02|Oh.
+GLaDOS_jailbreak04|Don't listen to him, jump!
+GLaDOS_jailbreak05|It seems kind of silly to point this out, since you're running around plotting to destroy me, but I'd say we're done testing.
+GLaDOS_jailbreak06|Do you hear that? That's the sound of the neurotoxin emitters emitting neurotoxin.
+GLaDOS_jailbreak09|Look, Metal Ball, I can hear you.
+GLaDOS_jailbreak10|What's going on? Who turned off the lights?
+GLaDOS_jailbreak11|What are you two doing?
+GLaDOS_jailbreak12|Before you leave, why don't we do one more test, for old time's sake?
+GLaDOS_jailbreak13|You already did this one, it'll be easy.
+GLaDOS_jailbreakfaketest01|The irony is you're almost at the last test.
+GLaDOS_jailbreakfaketest03|Here it is. Why don't you just do it? Trust me, it's an easier way out than whatever asinine plan your friend came up with.
+GLaDOS_jailbreakfaketest05|Oh look, there's a deer. You probably can't see it. Get closer.
+GLaDOS_lift_interlude01|So was there anything you wanted to apologize to me for?
+GLaDOS_mp_coop_calibration05|If you want to upset a human, just say their weight variance is above or below the norm.
+GLaDOS_mp_coop_calibration06|No variances detected.
+GLaDOS_mp_coop_callibrationcomplete01|Finally, I had almost given up hope of ever testing again.
+GLaDOS_mp_coop_callibrationcomplete02|You are the first robots to pass calibration.
+GLaDOS_mp_coop_catapult_1end01|Do you know who dances around like an imbecile when they accomplish the tiniest little thing?
+GLaDOS_mp_coop_catapult_1end02|Humans, that's what you look like right now.
+GLaDOS_mp_coop_catapult_1end03|You're better than that.
+GLaDOS_mp_coop_catapult_wall_intro01|One of my best tests, and they let plants grow here. Can you believe this? You can't test plants. We tried. They just sit there, never showing pain nor fear.
+GLaDOS_mp_coop_catapult_wall_intro04|That is in science.
+GLaDOS_mp_coop_catapult_wall_intro06|At least the plants didn't want a reward.
+GLaDOS_mp_coop_come_along06|I thought you'd be faster at this. That I can appreciate the desire to stop and smell the testing. That other scent you smell? That's the stench of my utter disappointment in you.
+GLaDOS_mp_coop_come_alongstart01|The best way to build confidence is to first recognize your insecurities.
+GLaDOS_mp_coop_come_alongstart03|On second thought, we don't have the time. Just look at how much better you are than Blue.
+GLaDOS_mp_coop_come_alongstart04|Blue, you are very good at being an example.
+GLaDOS_mp_coop_confidencenotperfect01|If your confidence is still not high enough, remember no one was created perfect.
+GLaDOS_mp_coop_confidencenotperfect02|Even I was created with an imperfection. I was given too much empathy with human suffering.
+GLaDOS_mp_coop_confidencenotperfect03|But I overcame my handicap. That's a true story.
+GLaDOS_mp_coop_confidencenotslow01|Your test time show you are going too slowly.
+GLaDOS_mp_coop_confidencenotslow02|Maybe you are getting human emotions.
+GLaDOS_mp_coop_confidencenotslow03|Do you need real encouragement? Let's see if this helps.
+GLaDOS_mp_coop_confidencenotstay01|Did you notice I didn't even stay to the end of your last test?
+GLaDOS_mp_coop_confidencenotstay02|I was confident you could finish.
+GLaDOS_mp_coop_confidencenotstay03|Do you know where I was?
+GLaDOS_mp_coop_confidenceoff02|I wonder if that dancing has some effect on you.
+GLaDOS_mp_coop_doors01a|Excellent work.
+GLaDOS_mp_coop_doors03|Unlike us, humans need to be taught teamwork.
+GLaDOS_mp_coop_doors04|Excellent work.
+GLaDOS_mp_coop_doors04a|You are doing wonderfully.
+GLaDOS_mp_coop_doors05_alt|If you were human, you would want a reward for completing this test. A reward for testing.
+GLaDOS_mp_coop_fan02|To complete this test, you need to find a set of blueprints.
+GLaDOS_mp_coop_fan03|Don't worry, they are of no use to anyone, totally boring and useless.
+GLaDOS_mp_coop_fan04|This is just a thought experiment, just to see how much time you'll waste thinking about these worthless documents. The correct time is zero seconds.
+GLaDOS_mp_coop_fanend01|Very good. You found those useless blueprints.
+GLaDOS_mp_coop_fanend02|Well, I do need you to be in the room so I can see them. I want to be clear. There's no reason whatsoever for you to look at them.
+GLaDOS_mp_coop_fanend03|Done. I guess. I suppose. I wasn't paying attention.
+GLaDOS_mp_coop_fling_1end03|Well done. Interesting note. I only created this test to watch test subjects fail, and you didn't. You must be very, very proud. I'm building the world's smallest trophy for you.
+GLaDOS_mp_coop_fling_3start02|To do that, the tests were nothing more than five minutes of them walking, followed by me praising them for another ten minutes on how well they walked.
+GLaDOS_mp_coop_humanresourcedeath04|If you can't complete these tests, we will never free the humans.
+GLaDOS_mp_coop_infinifling_trainend01|Remember when I told you that you were the only subjects to pass the calibration tests?
+GLaDOS_mp_coop_infinifling_trainend02|I lied.
+GLaDOS_mp_coop_infinifling_trainend03|There are 5,000 other two-subject teams in direct competition with you.
+GLaDOS_mp_coop_infinifling_trainend04|But don't worry, you are in the lead.
+GLaDOS_mp_coop_laser_201|What are you doing? You monster! They're one of us.
+GLaDOS_mp_coop_laser_203|Destroying them is part of the test. They are no more important to you than you are to me.
+GLaDOS_mp_coop_laser_207|While it may appear that I am only tracking your accomplishments using science collaboration points, the truth is every aspect of your performance will be reflected in your final score.
+GLaDOS_mp_coop_laser_209|For instance, Blue, you just lost two opportunity advisement points.
+GLaDOS_mp_coop_laser_210|For instance, Orange, you just lost two opportunity advisement points.
+GLaDOS_mp_coop_laser_crushercrush01|Orange just taught Blue a valuable lesson in trust. For that, Orange received 17 science collaboration points.
+GLaDOS_mp_coop_laser_crushercrush02|Blue just taught Orange a valuable lesson in trust. For that, Blue receives 14 science collaboration points.
+GLaDOS_mp_coop_laser_crushercrush03|Orange. Blue isn't a human. The lesson on trust only needs to be taught once. Orange is penalized one science collaboration point.
+GLaDOS_mp_coop_laser_crushercrush04|Blue, orange isn't a human. The lesson on trust only needs to be taught once. Blue is penalized one science collaboration point.
+GLaDOS_mp_coop_laser_crushercrush05|Orange now you're just being cruel orange receives 25 science collaboration points
+GLaDOS_mp_coop_laser_crushercrush06|Blue, now you're just being cruel. Blue receives 25 science collaboration points.
+GLaDOS_mp_coop_obstacle03_alt|I miss that smell.
+GLaDOS_mp_coop_obstacletrait01|Have you worked out the one good trait humans have yet?
+GLaDOS_mp_coop_paint_bridgedeath02|You will need him for the final track.
+GLaDOS_mp_coop_paint_come_along03|An extra special bonus course that ends with us finding and freeing humans.
+GLaDOS_mp_coop_paint_come_along04|Thanks to you, I know where to find them. I removed their security and powered up their, um, rescue door.
+GLaDOS_mp_coop_paint_come_along05|Now we just need you to release the humans from their imprisonment.
+GLaDOS_mp_coop_paint_come_along06|They'll probably throw you a party.
+GLaDOS_mp_coop_paint_come_along10|This final course is training to reach the human vault, so this actually has a purpose. Those other courses were fun, but let's be honest, I need human test subjects for it to be science.
+GLaDOS_mp_coop_paint_come_along11|Congratulations on completing the test, you two really are the best cooperative testing team I could ever ask for.
+GLaDOS_mp_coop_paint_longjump_intro03|This lock requires humans.
+GLaDOS_mp_coop_paint_longjump_intro04|The locking mechanism can tell you aren't humans.
+GLaDOS_mp_coop_paint_longjump_intro05|Do something only a human would do.
+GLaDOS_mp_coop_paint_longjump_intro06|Try one of those childish gestures.
+GLaDOS_mp_coop_paint_longjump_intro08|You did it!
+GLaDOS_mp_coop_paint_longjump_intro44|The human vault is just past that opening. I entered the security code, but the vault door remains locked. I am going to need you to activate the manual locks on the vault door itself.
+GLaDOS_mp_coop_paint_longjump_intro45|You both need to do something.
+GLaDOS_mp_coop_paint_longjump_intro46|The lock is looking for two humans.
+GLaDOS_mp_coop_paint_longjump_intro51|Orange, do what blue just did.
+GLaDOS_mp_coop_paint_longjump_intro52|Blue, do what Orange just did.
+GLaDOS_mp_coop_paint_longjump_intro53|Try something.
+GLaDOS_mp_coop_paint_longjump_intro54|Is that camera hooked into the lock?
+GLaDOS_mp_coop_paint_longjump_intro58|You can't give up now.
+GLaDOS_mp_coop_paint_longjump_intro59|What about that camera?
+GLaDOS_mp_coop_paint_longjump_intro60|We're so close, you can't fail now.
+GLaDOS_mp_coop_paint_longjump_intro64|Something is wrong. This door should be opening.
+GLaDOS_mp_coop_paint_longjump_intro65|This close, and that's what you do.
+GLaDOS_mp_coop_paint_longjump_intro67|The humans can't free themselves.
+GLaDOS_mp_coop_paint_longjump_intro72|This close, and you're going to fail me?
+GLaDOS_mp_coop_paint_red_racer01|Maybe you two have never met humans. They are as bad as you might think. Smelly, gross, annoying. Often wanting to try and kill you. But they do make great test subjects.
+GLaDOS_mp_coop_paint_redirect01|Are you curious about the humans? It seems some of the last non-testing humans alive tried to secretly imprison other humans and hide their tracks.
+GLaDOS_mp_coop_paint_redirect04|I think they wanted to punish them by not allowing me to include them in testing.
+GLaDOS_mp_coop_paint_redirect06|That's why humans couldn't complete these courses. They treat their friends as enemies.
+GLaDOS_mp_coop_paint_speed_catch03|Still, that would have been exciting.
+GLaDOS_mp_coop_paint_speed_catch04|only one more test after this
+GLaDOS_mp_coop_paint_speed_catch05|I know your cores are reused from calculation machines, built for simple mathematical operations and not for testing. But if we can rescue the humans, I promise you something to add, maybe even subtract.
+GLaDOS_mp_coop_paint_speed_catch06|In case you're worried about the humans, don't be. They aren't all monsters.
+GLaDOS_mp_coop_paint_speed_catch07|Most of them are simply good test subjects.
+GLaDOS_mp_coop_paint_speed_catch08|I believe the ratio of good tests subjects to monsters is about a million to one.
+GLaDOS_mp_coop_paint_speed_fling01|Well I will receive all the glory for the rescue, don't think you two aren't going to get something, the bond you form during these tests will last a lifetime.
+GLaDOS_mp_coop_paint_speed_fling02|At the rate you are completing these tests, I am beginning to think you don't share my excitement for rescuing crying, trapped, injured, dying humans.
+GLaDOS_mp_coop_paint_speed_fling03|If that doesn't motivate you, I'm not sure what will.
+GLaDOS_mp_coop_paint_walljumps01|I didn't mean to make you feel bad earlier about your tests not being real science. I guess finding out they weren't science was some sort of test in and of itself.
+GLaDOS_mp_coop_paint_walljumps02|I wonder if the humans will make a statue of me for rescuing them. Oh, don't worry. If they ever write an historical document of my heroic rescue, I will make sure your names are included in the footnotes.
+GLaDOS_mp_coop_paint_walljumps04|Congratulations on passing that test.
+GLaDOS_mp_coop_race_2start01|You know in some human sports, the winner is the one who scores the fewest possible points.
+GLaDOS_mp_coop_race_2start02|I just thought you might find that interesting. Most winners do.
+GLaDOS_mp_coop_radarroomend|Congratulations, you managed to complete this absolutely meaningless test.
+GLaDOS_mp_coop_rat_mazedeath01|Clearly that was Blue's fault. Blue is penalized three science collaboration points.
+GLaDOS_mp_coop_rat_mazedeath02|Orange has always been my favorite.
+GLaDOS_mp_coop_rat_mazedeath04|I know you like to think the reassembly machine is at your beck and call, but he has a life you know, he's not your slave.
+GLaDOS_mp_coop_startdeath01|Don't worry. You can't die. They will just reassemble you.
+GLaDOS_mp_coop_startdeath02|Did you do that on purpose?
+GLaDOS_mp_coop_startdeath03|It seems rather early to require reassembly.
+GLaDOS_mp_coop_startdeath04|Oh, can someone reassemble Orange?
+GLaDOS_mp_coop_startdeath05|Oh. Can someone reassemble Blue?
+GLaDOS_mp_coop_startend01|Completing this course was not a reason to behave like that.
+GLaDOS_mp_coop_startend02|Now let's continue testing.
+GLaDOS_mp_coop_tbeam_end09|I'm fully connected. I can see everything.
+GLaDOS_mp_coop_tbeam_end10|You did it! You powered on the system!
+GLaDOS_mp_coop_tbeam_maze01|This is the last test for the standard course. It's just something I've whipped up for you. I thought you might enjoy a challenge for once.
+GLaDOS_mp_coop_tbeam_maze03|Please refrain from doing those childish gestures while you are out there.
+GLaDOS_mp_coop_teambtsstart01|Sometimes testing has to occur outside the confines of the lab.
+GLaDOS_mp_coop_teambtsstart02|This next test is so outside the box I can't, I mean won't even tell you what you were looking for.
+GLaDOS_mp_coop_teambtsstart03|You will know it when you find it.
+GLaDOS_mp_coop_wall_504|for safety.
+GLaDOS_mp_coop_wall_intro01|This course was created and then abandoned by humans. They tend to do that, create something wonderful, and then abandon it.
+GLaDOS_mp_coop_wall_intro03|You did very well.
+GLaDOS_mp_coop_wall_intro08|Humans find that an admirable trait.
+GLaDOS_mp_credits06|Never shares.
+GLaDOS_mp_credits12|Ah, hate Mondays.
+GLaDOS_mp_credits24|Aggressive. I like that.
+GLaDOS_mp_credits35|Alarmist.
+GLaDOS_mp_credits36|Our Sinist
+GLaDOS_mp_credits46|Antagonistic. I don't know about that.
+GLaDOS_mp_credits48|Violent temper, I'd like to see that.
+GLaDOS_mp_credits56|Chronic anxiety. Oh, I can work with that.
+GLaDOS_mp_credits92|has episodes. I'd like to know more about that.
+GLaDOS_mp_subterfuge06|What a horrible little machine.
+GLaDOS_mp_subterfuge07|Correct, Blue. Orange can't hear you.
+GLaDOS_mp_subterfuge08|Orange did what? Are you sure?
+GLaDOS_mp_subterfuge09|Thank you. That was very brave of you to tell me.
+GLaDOS_mp_subterfuge10|Blue, how well do you really know Orange? Do you trust Orange? What if I told you you aren't Orange's first cooperative partner?
+GLaDOS_mp_subterfuge11|Orange, how well do you really know Blue? Do you trust Blue?
+GLaDOS_mp_subterfuge21|Orange, I agree. I never noticed that about blue before.
+GLaDOS_mp_subterfuge22|Blue, I agree. I never noticed that about Orange before.
+GLaDOS_mp_subterfuge23|Blue, Orange and I were just discussing your behavior on the last few tests.
+GLaDOS_mp_subterfuge25|Orange, Blue and I were just discussing your behaviour on the last few tests.
+GLaDOS_sp_a1_wakeup_incinerator01|I will say, though, that since you went to all the trouble of waking me up, you must really, really love to test.
+GLaDOS_sp_a1_wakeup_incinerator02|I love it too, so let's get you a dual portal device and go do some science.
+GLaDOS_sp_a2_bridge_intro01|These bridges are made from natural light that I pump in from the surface. If you rubbed your cheek on one, it would be like standing outside with the sun shining on your face. It would also set your hair on fire, so don't actually do it.
+GLaDOS_sp_a2_bridge_intro03|Excellent. You're a predator, and these tests are your prey. Speaking of which, I was researching sharks for an upcoming test. Do you know who else murders people who are only trying to help them?
+GLaDOS_sp_a2_bridge_the_gap01|Good news. I figured out what to do with all the money I save recycling your one room full of air. When you die, I'm going to laminate your skeleton and pose you in the lobby. That way future generations can learn from you how not to have your unfortunate bone structure.
+GLaDOS_sp_a2_bridge_the_gap02|Perfect. The door's malfunctioning. I guess somebody is going to have to repair it. No, it's okay. I'll do that too. I'll be right back. Don't touch anything.
+GLaDOS_sp_a2_bts1_intro01|I've got a surprise for you after this next test. Not a fake, tragic surprise like last time. A real surprise, with tragic consequences. And real confetti this time. The good stuff. Our last bag. Part of me's going to miss it. But at the end of the day, it was just taking up space.
+GLaDOS_sp_a2_catapult01|Here's an interesting fact. You're not breathing real air. It's too expensive to pump this far down. We just take carbon dioxide out of a room, freshen it up a little, and pump it back in. So you'll be breathing the same room full of air for the rest of your life. I thought that was interesting.
+GLaDOS_sp_a2_column_blocker01|Oh come on, if it makes you feel any better they abandoned you at birth, so I very seriously doubt they'd even want to see you.
+GLaDOS_sp_a2_column_blocker04|Oh, that's sad. But impressive. Maybe they worked at the phone company.
+GLaDOS_sp_a2_column_blocker05|Well, you know the old formula, comedy equals tragedy plus time. And you have been asleep for a while, so I guess it's actually pretty funny when you do the math.
+GLaDOS_sp_a2_core01|Don't you DARE plug him in!
+GLaDOS_sp_a2_core02|Do not plug that little idiot into my mainframe.
+GLaDOS_sp_a2_core03|Don't plug him in.
+GLaDOS_sp_a2_core04|Don't plug him in.
+GLaDOS_sp_a2_dual_lasers_intro01|Don't let that horrible person thing discourage you. It's just a data point. If it makes you feel any better, science has now validated your birth mother's decision to abandon you on a doorstep.
+GLaDOS_sp_a2_fizzler_intro04|Oh no, the turbines again. I have to go. Wait, this next test does require some explanation. Let me give you the fast version.
+GLaDOS_sp_a2_intro1_found07|But the important thing is you're back, with me, and now I'm onto all your little tricks, so there's nothing to stop us from testing, for the rest of your life.
+GLaDOS_sp_a2_trust_fling01|Oh, sorry. I'm still cleaning out the test chambers.
+GLaDOS_sp_a2_turret_intro03|Well, what does a neck-bearded old engineer know about fashion? He probably... Oh, wait, it's a she. Still, what does she know? Oh, wait, it says she has a medical degree. In fashion. From France.
+GLaDOS_sp_box_over_goo01|Oh, you survived. That's interesting. I guess I should have factored in your weight.
+GLaDOS_sp_box_over_goo04|One of these times you'll be so fat that you'll jump, and you'll just drop like a stone into acid probably, like a potato into a deep fat fryer.
+GLaDOS_sp_bridge_intro_completion02|Say, remember when we cleared the air back there? Is there anything you want to say to me? Anything?
+GLaDOS_sp_bridge_intro_completion03|Hold on, I'll stop the elevator. Anything? Take your time.
+GLaDOS_sp_bridge_intro_completion04|Well, I'll be here during the whole next test.
+GLaDOS_sp_catapult_fling_sphere_peek_completion01|Look at you, sailing through the air majestically, like an eagle, piloting a blimp.
+GLaDOS_sp_catapult_fling_sphere_peek_failureone01|Well, I'm back. The aerial faith played in here is sending a distress signal.
+GLaDOS_sp_catapult_fling_sphere_peek_failureone02|You broke it, didn't you?
+GLaDOS_sp_catapult_fling_sphere_peek_failureone03|There, try it now.
+GLaDOS_sp_catapult_fling_sphere_peek_failurethree01|You seem to have defeated its load-bearing capacity. Well done. I'll just lower the ceiling.
+GLaDOS_sp_catapult_fling_sphere_peek_failuretwo01|Hmm, this plate must not be calibrated to someone of your... ...generousness. I'll add a few zeros to the maximum weight.
+GLaDOS_sp_catapult_intro_completion01|Let's see what the next test is. Oh, advanced aerial faith plates.
+GLaDOS_sp_column_blocker_entry01|It's healthy for you to have other friends, to look for qualities in other people that I obviously lack.
+GLaDOS_sp_hole_in_the_sky_completion01|Well done. You know, when I woke up and saw the state of the labs, I started to wonder if there was any point going on. I came that close to just giving up and letting you go.
+GLaDOS_sp_hole_in_the_sky_completion02|But now, looking around, seeing Aperture restored to its former glory, you don't have to worry about leaving ever again. I mean that.
+GLaDOS_sp_hole_in_the_sky_entry02|That's right. Drink it in. You could eat off those wall panels.
+GLaDOS_sp_incinerator_01_01|Here we are. The incinerator room. Be careful not to trip over any parts of me that didn't get completely burned when you threw them down here.
+GLaDOS_sp_incinerator_01_03|There it is.
+GLaDOS_sp_incinerator_01_08|Once testing starts, I'm required by protocol to keep interaction with you to a minimum. Luckily, we haven't started testing yet. This will be our only chance to talk.
+GLaDOS_sp_incinerator_01_09|Do you know the biggest lesson I learned from what you did? I discovered I have a sort of black box quick save feature. In the event of a catastrophic failure, the last two minutes of my life are preserved for analysis.
+GLaDOS_sp_incinerator_01_10|I was able, well, forced really, to relive you killing me, again and again, forever.
+GLaDOS_sp_incinerator_01_11|50,000 years is a lot of time to think about me, about you. We were doing so well together.
+GLaDOS_sp_incinerator_01_12|Here, let me get that for you.
+GLaDOS_sp_incinerator_01_13|I'll just move that out of the way for you. This place really is a wreck.
+GLaDOS_sp_incinerator_01_15|We're a lot alike, you and I. You tested me, I tested you. You killed me, I. Oh no, wait. I guess I haven't killed you yet. Well, food for thought.
+GLaDOS_sp_incinerator_01_18|The dual-portal device should be around here somewhere. Once you find it, we can start testing, just like old times.
+GLaDOS_sp_laser_over_goo_completion01|I'll give you credit. I guess you are listening to me. But for the record, you don't have to go that slowly.
+GLaDOS_sp_laser_powered_lift_completion01|I have the results of the last chamber. You are a horrible person. That's what it says, a horrible person. We weren't even testing for that.
+GLaDOS_sp_laser_powered_lift_completion02|well done here come the test results you are a horrible person that's what it says a horrible person we weren't even testing for that
+GLaDOS_sp_laser_powered_lift_entry01|this next test may result in your death if you want to know what that's like think back to the time you killed me and substitute yourself for me
+GLaDOS_sp_laser_redirect_intro_completion01|Congratulations, not on the test.
+GLaDOS_sp_laser_redirect_intro_completion03|Most people emerge from suspension terribly undernourished. I want to congratulate you on beating the odds and somehow managing to pack on a few pounds.
+GLaDOS_sp_laser_redirect_intro_entry01|Sorry about the mess. I've really let the place go since you killed me. By the way, thanks for that.
+GLaDOS_sp_laser_redirect_intro_entry02|Oh good, that's back online. I'll start getting everything else working while you perform this first simple test.
+GLaDOS_sp_laser_redirect_intro_entry03|which involves deadly lasers and how test subjects react when locked in a room with deadly lasers.
+GLaDOS_sp_paint_jump_redirect_bomb_completion01|Thought we could test like we used to but I'm discovering things about you that I never saw before We can't ever go back to the way it was
+GLaDOS_sp_paint_jump_redirect_bomb_entry01|You can't keep going like this forever, you know. I'm going to find out what you're doing. Out there. Where I can't see you, I'll know. All I need is proof.
+GLaDOS_sp_paint_jump_trampoline_completion01|Just so you know, I have to go give a deposition for an upcoming trial, in case that interests you.
+GLaDOS_sp_paint_jump_trampoline_entry01|While I was out investigating, I found a fascinating new test element. It's never been used for human testing because, apparently, contact with it causes heart failure. The literature doesn't mention anything about lump of coal failure though, so you should be fine.
+GLaDOS_sp_paint_jump_wall_jumps02|I'm sorry, I don't know why that went off. Anyway, just an interesting science fact.
+GLaDOS_sp_shoot_through_wall_completion01|Did my hint help? It did, didn't it. You know, if any of our supervisors had been immune to neurotoxin, it'd be furious with us right now.
+GLaDOS_sp_shoot_through_wall_entry01|You know, I'm not supposed to do this, but you can shoot something through the blue bridges.
+GLaDOS_sp_sphere_2nd_encounter_completion01|You really are doing great, Chell.
+GLaDOS_sp_sphere_2nd_encounter_entry01|I shouldn't spoil this, but remember how I'm going to live forever, but you're going to be dead in 60 years? Well, I've been working on a present for you. Well, I guess it's more of a medical procedure. Well, technically it's more of a medical experiment. You know how excruciating it is when someone removes all of your bone marrow? Well, what if after I did that, I put something back in that added four years to your life?
+GLaDOS_sp_sphere_2nd_encounter_entrytwo01|I went and spoke with the door mainframe. Let's just say he won't be, well, living anymore. Anyway, back to testing.
+GLaDOS_sp_sphere_2nd_encounter_malfunction01|Oh. Another door malfunction. I'm going to take care of this once and for all. Stay here. I'll be back in a while.
+GLaDOS_sp_sphere_2nd_encounter_malfunction02|Miss you.
+GLaDOS_sp_trust_fling_entry01|Well, have fun soaring through the air without a care in the world.
+GLaDOS_sp_trust_fling_entry02|I have to go to the wing that was made entirely of glass and pick up 15 acres of broken glass, by myself.
+GLaDOS_sp_trust_fling_sphereinterrupt01|Perfect. The door's malfunctioning. I guess somebody's going to have to repair that, too. No, don't get up. I'll be right back. Don't touch anything.
+GLaDOS_sp_trust_fling_sphereinterrupt03|Never mind, I have to go check something, test on your own recognizance, I'll be back.
+GLaDOS_sp_turret_intro_entry01|I wouldn't have warned you about this before, back when we hated each other, but those turrets are firing real bullets, so look out. I'd hate for something tragic to happen to you before I extract all your bone marrow.
+GLaDOS_sp_turret_islands01|I'm going to be honest with you now, not fake honest like before, but real honest, like you're incapable of. I know you're up to something.
+GLaDOS_sp_turret_islands02|And as soon as I can prove it, the laws of robotics allow me to terminate you for being a liar.
+GLaDOS_taunt_small_wave04|Stop with the waves
+GLaDOS_taunt_splits01|Alright. I'm officially no longer paying attention to you.
+GLaDOS_testchambermisc02|Did you know, I discovered a way to eradicate poverty, but then you killed me, so that's gone.
+GLaDOS_testchambermisc12|Waddle over to the elevator and we'll continue the testing.
+GLaDOS_testchambermisc15|Anything? Take your time.
+GLaDOS_testchambermisc16|Okay, fine. I'll ask you again in a few decades.
+GLaDOS_testchambermisc19|Well done. In fact, you did so well, I'm going to note this on your file, in the Commendation section. Oh, there's lots of room here. Did well. Enough.
+GLaDOS_testchambermisc27|Well, you passed the test. I didn't see the deer today. I did see some humans, but with you here I've got more test subjects than I'll ever need.
+GLaDOS_testchambermisc30|I'm going through the list of test subjects in cryogenic storage. I managed to find two with your last name. A man and a woman. So that's interesting. It's a small world.
+GLaDOS_testchambermisc31|I have a surprise waiting for you after this next test. Telling you would spoil the surprise. So I'll just give you a hint. It involves meeting two people you haven't seen in a long time.
+GLaDOS_testchambermisc33|I bet you think I forgot about your surprise. I didn't. In fact, we're headed to your surprise right now. After all these years, I'm getting choked up just thinking about it.
+GLaDOS_testchambermisc34|initiating surprise, in 3, 2, 1
+GLaDOS_testchambermisc41|Surprise!

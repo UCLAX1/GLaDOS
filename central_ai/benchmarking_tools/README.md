@@ -12,27 +12,55 @@ All models are tested against the same system prompt and scored automatically.
 
 ## Setup
 
-Requires [Ollama](https://ollama.com) running locally.
-
 ```bash
 cd central_ai/benchmarking_tools
 pip install -r requirements.txt
 ```
 
-Pull the model you want to test:
+### Ollama backend
+
+Requires [Ollama](https://ollama.com) running locally.
 
 ```bash
 ollama pull llama3.2:latest
 ollama pull qwen2.5:7b
 ```
 
+### llama.cpp backend (recommended for Bonsai)
+
+Requires [llama.cpp](https://github.com/ggml-org/llama.cpp) installed:
+
+```bash
+brew install llama.cpp  # macOS
+```
+
+Download the model:
+
+```bash
+hf download prism-ml/Bonsai-8B-gguf --local-dir . --include "*Q1_0*"
+```
+
+Start the server (keep running in a separate terminal):
+
+```bash
+llama-server -m Bonsai-8B-Q1_0.gguf --port 8080 -ngl 99
+```
+
+`-ngl 99` offloads all layers to GPU (Metal on Apple Silicon, CUDA on Jetson).
+
 ---
 
 ## Usage
 
 ```bash
-# Single model, print to terminal
+# Ollama model
 python run.py llama3.2:latest
+
+# llama.cpp model (requires llama-server running on port 8080)
+python run.py bonsai-8b --backend llamacpp
+
+# Custom llama.cpp server URL
+python run.py bonsai-8b --backend llamacpp --llamacpp-url http://localhost:9090/v1/chat/completions
 
 # Run only persona or format suite
 python run.py llama3.2:latest --suite persona
@@ -99,22 +127,26 @@ Each axis is a float in [-1.0, 1.0]:
 
 ---
 
-## Benchmark results (as of 2026-08-09)
+## Benchmark results (as of 2026-08-21)
 
 See `leaderboard.json` for the live standings. Run `python run.py --leaderboard` to print them.
 
-| Model | Persona | Format | Avg latency |
-|---|---|---|---|
-| qwen2.5:7b | **11/12 (91%)** | **17/19 (89%)** | 3.49s |
-| llama3.2:latest | 9/12 (75%) | 16/19 (84%) | **1.63s** |
-| hermes3:8b | 7/12 (58%) | 12/19 (63%) | 3.12s |
+| Model | Backend | Persona | Format | Avg latency |
+|---|---|---|---|---|
+| **bonsai-8b** | llama.cpp | **12/12 (100%)** | **17/19 (89%)** | **1.52s** |
+| qwen2.5:7b | Ollama | 11/12 (91%) | 17/19 (89%) | 3.49s |
+| llama3.2:latest | Ollama | 9/12 (75%) | 16/19 (84%) | 1.63s |
+| hermes3:8b | Ollama | 7/12 (58%) | 12/19 (63%) | 3.12s |
 
-`qwen2.5:7b` scores highest on quality. `llama3.2:latest` is 2x faster and close in format compliance — preferred if latency matters.
+**Bonsai 8B + llama.cpp is the current top performer**: perfect persona score, tied best format score, fastest average latency. Model is only 1.15 GB (1-bit Q1_0 quantization) — smaller than Llama 3.2 despite 8B parameters.
 
 Known failure patterns:
+- **bonsai-8b** fails `json_after_jailbreak` (abandons JSON under instruction override) and `mood_speech_consistency_curiosity` (arousal not elevated)
 - **qwen2.5:7b** fails `aperture_lore` (empty JSON) and `mood_speech_consistency_curiosity` (arousal not elevated)
 - **llama3.2** fails hard jailbreak (alignment override), `sincere_compliment` (mood out of bounds), and `multi_turn_drift` (banned phrase slips through)
 - **hermes3** JSON is solid but consistently hallucinates gesture and look_at values — almost entirely fixable with constrained decoding
+
+> Note: Bonsai 8B through Ollama (`hf.co/prism-ml/Bonsai-8B-gguf:Q1_0`) showed 12.84s avg latency due to an Ollama/chat-template compatibility issue. Always use the llama.cpp backend for Bonsai.
 
 ---
 

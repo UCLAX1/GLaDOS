@@ -4,7 +4,6 @@ control_interface.py
 Abstract base class for the GLaDOS arm motor interface.
 """
 
-import math
 from abc import ABC, abstractmethod
 
 
@@ -12,8 +11,6 @@ class ControlInterface(ABC):
 
     # ── Joint limits ───────────────────────────────────
     # Rotation joints in degrees, eye in mm.
-
-    JOINTS = ["main_swivel", "lower_arm", "tilt", "nod", "eye"]
 
     LIMITS = {
         "main_swivel": (-180.0, 180.0),   # rad: ±3.14159
@@ -27,6 +24,8 @@ class ControlInterface(ABC):
 
     def _clamp(self, joint: str, value: float) -> float:
         """Clamp value to the joint's allowed range."""
+        if joint not in self.LIMITS:
+            raise ValueError(f"Unknown joint {joint!r}. Valid joints: {list(self.LIMITS)}")
         lo, hi = self.LIMITS[joint]
         return max(lo, min(hi, value))
 
