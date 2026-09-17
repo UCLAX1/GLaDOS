@@ -12,7 +12,10 @@ Prerequisites (3 separate steps):
   2. Start speech daemon:
        python3 speech/glados_daemon.py
 
-  3. Run this script (from X1_GLaDOS/ root, with listening venv active):
+  3. Start sim viewer (sim only, skip if GLADOS_HARDWARE=1):
+       mjpython sim/sim_daemon.py
+
+  4. Run this script (from X1_GLaDOS/ root, with listening venv active):
        source listening/.venv/bin/activate
        python3 run_glados.py
 
@@ -22,10 +25,11 @@ Flow (streamed end to end — each stage starts before the previous finishes):
      during the VAD gap)           sentence as it            as it lands)
                                    is generated)
                                         │
-                                        └──gesture──►  run_action.py <gesture>
-                                           (mjpython, or python3 if GLADOS_HARDWARE=1)
+                                        └──gesture──►  sim_daemon (sim)
+                                                       run_action.py (hardware)
 """
 
+import json
 import os
 import statistics
 import subprocess
@@ -43,8 +47,8 @@ from speech.speech_queue import enqueue
 # ── Config ─────────────────────────────────────────────────────────────────────
 # Gestures run in the simulator by default. Set GLADOS_HARDWARE=1 to drive the
 # real motors instead — run_action.py switches backend on the same variable.
-HARDWARE = bool(os.environ.get("GLADOS_HARDWARE"))
-ACTION_CMD = ["python3"] if HARDWARE else ["mjpython"]
+HARDWARE      = bool(os.environ.get("GLADOS_HARDWARE"))
+SIM_QUEUE_DIR = Path("/tmp/glados_sim_queue")
 
 # Maps brain gesture names → action script names in actions/scripts/
 GESTURE_MAP = {
@@ -77,18 +81,27 @@ def dispatch_speech(text: str, speed: float = 1.0):
 
 
 def dispatch_gesture(gesture: str):
-    """Run the matching motor action (non-blocking, fire-and-forget)."""
+    """Send a gesture to the sim daemon (sim) or hardware subprocess (hardware).
+
+    Sim: drops a JSON file in /tmp/glados_sim_queue/ — sim_daemon.py picks it
+    up on its next tick and plays it on the persistent viewer. Non-blocking.
+
+    Hardware: spawns run_action.py via python3 as before.
+    """
     action = GESTURE_MAP.get(gesture)
     if not action:
         return   # unmapped or "idle" — nothing to move
-    try:
-        subprocess.Popen(
-            ACTION_CMD + ["actions/run_action.py", action, "--once"],
-        )   # child inherits GLADOS_HARDWARE from os.environ
-    except FileNotFoundError:
-        # Missing interpreter must not kill the listener thread (see on_transcription).
-        print(f"[gesture] {ACTION_CMD[0]} not found — skipped {action!r}. "
-              f"Install mujoco in this venv: pip install mujoco")
+
+    if HARDWARE:
+        try:
+            subprocess.Popen(["python3", "actions/run_action.py", action, "--once"])
+        except FileNotFoundError:
+            print(f"[gesture] python3 not found — skipped {action!r}")
+    else:
+        SIM_QUEUE_DIR.mkdir(exist_ok=True)
+        stamp      = f"{time.time():.6f}"
+        queue_file = SIM_QUEUE_DIR / f"{stamp}.json"
+        queue_file.write_text(json.dumps({"action": action}))
 
 
 # ── Main callback ──────────────────────────────────────────────────────────────
