@@ -109,6 +109,12 @@ def dispatch_gesture(gesture: str):
 def on_transcription(text: str):
     """Called by SpeechListener after each complete utterance."""
     stt_timing = dict(listener.last_timing) if listener else {}
+
+    # Ignore noise/hallucinations — require at least 2 words
+    if len(text.strip().split()) < 2:
+        print(f"\n[you]    (ignored: {text!r})")
+        return
+
     print(f"\n[you]    {text}")
 
     # Queue each sentence the moment it exists. "speech" is the first field in

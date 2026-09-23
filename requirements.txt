@@ -1,0 +1,27 @@
+# GLaDOS pipeline — install into a fresh venv:
+#   python3 -m venv listening/venv
+#   source listening/venv/bin/activate
+#   pip install -r requirements.txt
+
+# ── STT / Listening ───────────────────────────────────────────────────────────
+faster-whisper
+silero-vad
+pyaudio
+torch
+torchaudio
+soundfile
+numpy
+
+# ── TTS / Speech ──────────────────────────────────────────────────────────────
+kokoro
+inflect
+
+# ── Brain ─────────────────────────────────────────────────────────────────────
+requests
+
+# ── Sim ───────────────────────────────────────────────────────────────────────
+mujoco
+
+# ── GUI ───────────────────────────────────────────────────────────────────────
+PySide6
+pillow

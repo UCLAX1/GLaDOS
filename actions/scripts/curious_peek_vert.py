@@ -1,4 +1,5 @@
 def curious_peek_vert(seq):
     return (seq
-        .pose(lower_arm=30, eye=2, duration=1) # Depends where target is, 30 deg is arbitrary for now
+        .pose(lower_arm=15, eye=1, duration=1.0, additive=True)
+        .pose(lower_arm=-15, eye=-1, duration=1.0, additive=True)
         )
