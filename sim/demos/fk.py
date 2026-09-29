@@ -1,5 +1,9 @@
+import sys, pathlib
 import mujoco
 import numpy as np
+
+sys.path.insert(0, str(pathlib.Path(__file__).parents[1]))
+import params
 
 
 def Rz(theta):
@@ -27,8 +31,7 @@ def fk_head_mount(theta_z, theta_y):
     Returns head_mount site position in world frame.
     """
     ALPHA = 0.3491    # fixed 20 deg upper_arm tilt
-    L1 = 0.6092       # upper_arm -> lower_arm origin offset
-    L2 = 0.3048       # lower_arm origin -> head_mount site offset
+    L1, L2 = params.L1, params.L2  # from design_freeze_baseline.csv
 
     p0 = np.array([0, 0, -L2])
     p1 = Ry(theta_y) @ p0 + np.array([0, 0, -L1])
@@ -38,8 +41,8 @@ def fk_head_mount(theta_z, theta_y):
     return p3
 
 
-def sim_head_mount(model_path: str, theta_z_deg: float, theta_y_deg: float):
-    model = mujoco.MjModel.from_xml_path(model_path)
+def sim_head_mount(theta_z_deg: float, theta_y_deg: float):
+    model = params.load_model()
     data = mujoco.MjData(model)
 
     data.qpos[0] = np.deg2rad(theta_z_deg)
@@ -51,13 +54,13 @@ def sim_head_mount(model_path: str, theta_z_deg: float, theta_y_deg: float):
 
 
 if __name__ == "__main__":
-    sim_pos, fk_pos = sim_head_mount("model/glados.xml", theta_z_deg=180, theta_y_deg=20)
+    sim_pos, fk_pos = sim_head_mount(theta_z_deg=180, theta_y_deg=20)
     print("sim: ", sim_pos)
     print("fk:  ", fk_pos)
-    sim_pos, fk_pos = sim_head_mount("model/glados.xml", theta_z_deg=0, theta_y_deg=0)
+    sim_pos, fk_pos = sim_head_mount(theta_z_deg=0, theta_y_deg=0)
     print("sim: ", sim_pos)
     print("fk:  ", fk_pos)
-    sim_pos, fk_pos = sim_head_mount("model/glados.xml", theta_z_deg=40, theta_y_deg=40)
+    sim_pos, fk_pos = sim_head_mount(theta_z_deg=40, theta_y_deg=40)
     print("sim: ", sim_pos)
     print("fk:  ", fk_pos)
         

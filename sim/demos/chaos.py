@@ -9,11 +9,11 @@ if os.environ.get("GLADOS_HARDWARE"):
 
 import mujoco, mujoco.viewer
 sys.path.insert(0, str(pathlib.Path(__file__).parents[2]))
+sys.path.insert(0, str(pathlib.Path(__file__).parents[1]))
+import params
 from control.mujoco_control import MujocoControl
 
-MODEL_XML = pathlib.Path(__file__).parents[1] / "model" / "glados.xml"
-
-model = mujoco.MjModel.from_xml_path(str(MODEL_XML))
+model = params.load_model()
 data  = mujoco.MjData(model)
 robot = MujocoControl(model, data)
 

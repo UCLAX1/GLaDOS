@@ -1,3 +1,4 @@
+<!-- TEMPLATE: dollar-brace tokens filled from design_freeze_baseline.csv by sim/params.py. Load via params.load_model("push.xml"). -->
 <mujoco model="glados_push">
 
   <compiler angle="radian"/>
@@ -122,7 +123,7 @@
         <!-- neck_platform→head: 0.10m  +  head→eye: 0.07m  +  eye half-height: 0.01m = 0.18m -->
         <!-- TODO: tune head pos z once rod length is measured from real hardware -->
         <body name="head" pos="0 0 -0.10">
-          <geom type="cylinder" size="0.07 0.04" euler="1.5708 0 0" mass="3.0"/>
+          <geom type="cylinder" size="0.07 0.04" euler="1.5708 0 0" mass="${head_mass}"/>
 
           <!-- IK reference point — tip of eye -->
           <site name="end_effector" pos="0 0 -0.08" size="0.0005" rgba="1 0 0 1"/>

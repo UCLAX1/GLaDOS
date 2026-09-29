@@ -4,7 +4,11 @@ control_interface.py
 Abstract base class for the GLaDOS arm motor interface.
 """
 
+import pathlib, sys
 from abc import ABC, abstractmethod
+
+sys.path.insert(0, str(pathlib.Path(__file__).parents[1] / "sim"))
+import params
 
 
 class ControlInterface(ABC):
@@ -12,13 +16,7 @@ class ControlInterface(ABC):
     # ── Joint limits ───────────────────────────────────
     # Rotation joints in degrees, eye in mm.
 
-    LIMITS = {
-        "main_swivel": (-180.0, 180.0),   # rad: ±3.14159
-        "lower_arm":   (0.0,    85.9),    # rad: 0 to 1.5
-        "tilt":        (-17.2,  17.2),    # rad: ±0.3  (side to side)
-        "nod":         (-34.4,  22.9),    # rad: -0.6 to 0.4  (forward/back)
-        "eye":         (-2.0,   2.0),     # m:   ±0.002  (mm here)
-    }
+    LIMITS = params.LIMITS_DEG  # from sim/model/design_freeze_baseline.csv
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 

@@ -12,11 +12,13 @@ Run: venv/bin/python demos/check_head_mechanism.py
 """
 
 import pathlib
+import sys
 
 import mujoco
 import numpy as np
 
-MODEL_XML = pathlib.Path(__file__).parents[1] / "model" / "push.xml"
+sys.path.insert(0, str(pathlib.Path(__file__).parents[1]))
+import params
 
 STATIONS = [
     ("horn0_tip", "plate_0"),
@@ -26,7 +28,7 @@ STATIONS = [
 
 
 def main():
-    model = mujoco.MjModel.from_xml_path(str(MODEL_XML))
+    model = params.load_model("push.xml")
     data = mujoco.MjData(model)
 
     mujoco.mj_forward(model, data)

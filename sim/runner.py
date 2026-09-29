@@ -20,18 +20,17 @@ import mujoco
 import mujoco.viewer
 
 sys.path.insert(0, str(pathlib.Path(__file__).parents[1]))
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+import params
 from control.mujoco_control import MujocoControl
 from actions.sequence import Sequence, TICK_RATE
-
-_DEFAULT_XML = pathlib.Path(__file__).parent / "model" / "glados.xml"
 
 
 class GladosSim:
     """Loads the MuJoCo model and produces Sequences wired to the sim loop."""
 
     def __init__(self, xml_path=None):
-        path = pathlib.Path(xml_path) if xml_path else _DEFAULT_XML
-        self.model = mujoco.MjModel.from_xml_path(str(path))
+        self.model = mujoco.MjModel.from_xml_path(str(xml_path)) if xml_path else params.load_model()
         self.data  = mujoco.MjData(self.model)
         self.robot = MujocoControl(self.model, self.data)
 

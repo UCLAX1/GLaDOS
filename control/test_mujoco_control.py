@@ -18,7 +18,8 @@ XML_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 
 
 def demo():
-    model = mujoco.MjModel.from_xml_path(XML_PATH)
+    import params  # sim/params.py, put on path by control_interface
+    model = params.load_model()
     data = mujoco.MjData(model)
     robot = MujocoControl(model, data)
 
