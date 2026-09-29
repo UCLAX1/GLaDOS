@@ -48,4 +48,5 @@ def xml(name="glados.xml") -> str:
 
 
 def load_model(name="glados.xml") -> mujoco.MjModel:
-    return mujoco.MjModel.from_xml_string(xml(name))
+    meshes = {f.name: f.read_bytes() for f in (_HERE / "assets").rglob("*.obj")}
+    return mujoco.MjModel.from_xml_string(xml(name), meshes)
