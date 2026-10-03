@@ -289,8 +289,8 @@ def vad_worker(
             if enable_early_transcription \
                 and transcription_resume_event.is_set() \
                 and vad_detects_speech_start \
-                and is_speaking.value:
-                # and final_transcription_worker_is_busy.value:
+                and is_speaking.value \
+                and final_transcription_worker_is_busy.value:
                 # TODO: fix this ^^^
 
                 should_keep_queue.put(False) # discard
