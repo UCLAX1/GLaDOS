@@ -57,6 +57,7 @@ GESTURE_MAP = {
     "slow_sweep":      "scan",
     "lean_in":         "curious_peek_vert",
     "dismissive_turn": "look_away",
+    "nod":             "nod",
     "idle":            None,
 }
 HOME = {"lower_arm": 20, "main_swivel": 0, "nod": 10}
@@ -88,7 +89,8 @@ _last_unspoken: list[str] = []        # sentences queued but not yet played at i
 _currently_speaking = threading.Event()  # set while audio is playing
 auto_interrupt = threading.Event()    # toggleable: interrupt on barge-in
 auto_interrupt.set()                  # on by default
-_muted = threading.Event()            # when set, speech is silenced (TTS skipped)
+_muted    = threading.Event()   # mute: block TTS output
+_deafened = threading.Event()   # deafen: ignore mic input
 _admin_console: "AdminConsole | None" = None  # set after window creation
 procs: list[subprocess.Popen] = []
 listener: "SpeechListener | None" = None   # set in main(); used by shutdown()
@@ -120,7 +122,7 @@ def _interrupt_speech(signals):
     signals.pipe_speak.emit("—")
 
 def on_transcription(text: str, signals):
-    if not text.strip():
+    if _deafened.is_set() or len(text.strip().split()) < 1:
         return
 
     was_speaking = _currently_speaking.is_set() or bool(_tts_queue)
@@ -190,7 +192,12 @@ def _gesture_loop(signals):
         try:
             mod = importlib.import_module(f"actions.scripts.{action_name}")
             fn  = getattr(mod, action_name)
-            fn(Sequence(robot, tick_fn=tick)).play()
+            # idle is interruptable: stop as soon as a new action is queued
+            if action_name == "idle":
+                running_fn = lambda: _gesture_q.empty()
+            else:
+                running_fn = lambda: True
+            fn(Sequence(robot, tick_fn=tick, running_fn=running_fn)).play()
         except Exception as e:
             print(f"[gesture] {action_name!r} failed: {e}")
         signals.pipe_action.emit("")  # clear when done
@@ -364,7 +371,7 @@ class PipelineBar(QWidget):
 # ── Admin console ─────────────────────────────────────────────────────────────
 
 class AdminConsole(QDialog):
-    """Floating admin window: overrides, controls, raw log."""
+    """Separate admin window — independent, no always-on-top."""
 
     # Signal so the log appender (called from any thread) is thread-safe
     _log_line = Signal(str)
@@ -374,7 +381,8 @@ class AdminConsole(QDialog):
         self.signals = signals
         self.setWindowTitle("GLaDOS Admin")
         self.resize(560, 720)
-        self.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint)
+        # Qt.Window makes it a proper standalone window; no StaysOnTop
+        self.setWindowFlags(Qt.Window)
         self.setStyleSheet("background: #0e0e0e; color: #ccc;")
         self._log_line.connect(self._append_log)
         self._build()
@@ -421,21 +429,50 @@ class AdminConsole(QDialog):
             cb.setStyleSheet("color: #aaa;")
             return cb
 
-        # ── Big mute button ───────────────────────────────────────────────────
-        self.mute_btn = QPushButton("🔇  MUTE")
-        self.mute_btn.setCheckable(True)
-        self.mute_btn.setChecked(False)
-        self.mute_btn.setFont(QFont("Menlo", 14, QFont.Bold))
-        self.mute_btn.setFixedHeight(52)
-        self.mute_btn.setStyleSheet(
-            "QPushButton { background: #1a1a1a; color: #555; border: 2px solid #333;"
-            " border-radius: 6px; }"
-            "QPushButton:checked { background: #3a0a0a; color: #e57373;"
-            " border: 2px solid #e57373; }"
-            "QPushButton:pressed { background: #2a0a0a; }"
+        # ── Manual input ──────────────────────────────────────────────────────
+        sec0, lay0 = _section("MANUAL INPUT  (as if spoken by human)")
+        self.manual_input = QLineEdit()
+        self.manual_input.setFont(mono10)
+        self.manual_input.setPlaceholderText("Type something and press Enter…")
+        self.manual_input.setStyleSheet(
+            "background: #141414; color: #ddd; border: 1px solid #333; border-radius: 3px; padding: 4px;"
         )
+        self.manual_input.returnPressed.connect(self._on_manual_input)
+        lay0.addWidget(self.manual_input)
+        send_row = QHBoxLayout()
+        send_row.addStretch()
+        send_btn = _btn("▶ send", "#1a2a1a", "#4caf50")
+        send_btn.clicked.connect(self._on_manual_input)
+        send_row.addWidget(send_btn)
+        lay0.addLayout(send_row)
+        root.addWidget(sec0)
+
+        # ── Mute / Deafen buttons ─────────────────────────────────────────────
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+
+        def _big_toggle(label, color):
+            b = QPushButton(label)
+            b.setCheckable(True)
+            b.setChecked(False)
+            b.setFont(QFont("Menlo", 12, QFont.Bold))
+            b.setFixedHeight(52)
+            b.setStyleSheet(
+                f"QPushButton {{ background: #1a1a1a; color: #555; border: 2px solid #333; border-radius: 6px; }}"
+                f"QPushButton:checked {{ background: #2a0a0a; color: {color}; border: 2px solid {color}; }}"
+                f"QPushButton:pressed {{ background: #2a0a0a; }}"
+            )
+            return b
+
+        self.mute_btn = _big_toggle("🔇  MUTE", "#e57373")
         self.mute_btn.toggled.connect(self._on_mute_toggle)
-        root.addWidget(self.mute_btn)
+        btn_row.addWidget(self.mute_btn)
+
+        self.deaf_btn = _big_toggle("🎙 DEAFEN", "#ab82d4")
+        self.deaf_btn.toggled.connect(self._on_deafen_toggle)
+        btn_row.addWidget(self.deaf_btn)
+
+        root.addLayout(btn_row)
 
         # ── Interrupt & pipeline ──────────────────────────────────────────────
         sec, lay = _section("PIPELINE")
@@ -520,6 +557,29 @@ class AdminConsole(QDialog):
 
         root.addWidget(sec4)
 
+        # ── Actions ───────────────────────────────────────────────────────────
+        sec_act, lay_act = _section("ACTIONS")
+        actions = [
+            "idle", "nod", "scan",
+            "curious_peek_horiz", "curious_peek_vert",
+            "confused_scan", "look_away",
+            "eye_blink", "eye_extend", "eye_retract",
+        ]
+        grid = QHBoxLayout()
+        grid.setSpacing(4)
+        col = None
+        for i, name in enumerate(actions):
+            if i % 2 == 0:
+                col = QVBoxLayout()
+                col.setSpacing(4)
+                grid.addLayout(col)
+            label = name.replace("_", " ")
+            b = _btn(label)
+            b.clicked.connect(lambda checked=False, n=name: self._on_run_action(n))
+            col.addWidget(b)
+        lay_act.addLayout(grid)
+        root.addWidget(sec_act)
+
         # ── Subprocess controls ───────────────────────────────────────────────
         sec5, lay5 = _section("SUBPROCESSES")
         proc_row = QHBoxLayout()
@@ -543,14 +603,36 @@ class AdminConsole(QDialog):
 
     # ── Handlers ──────────────────────────────────────────────────────────────
 
+    def _on_run_action(self, name: str):
+        try:
+            _gesture_q.get_nowait()
+        except queue.Empty:
+            pass
+        _gesture_q.put_nowait(name)
+
+    def _on_manual_input(self):
+        text = self.manual_input.text().strip()
+        if not text:
+            return
+        self.manual_input.clear()
+        on_transcription(text, self.signals)
+
     def _on_mute_toggle(self, checked):
         if checked:
             _muted.set()
-            _interrupt_speech(self.signals)   # silence what's currently playing too
+            _interrupt_speech(self.signals)
             self.mute_btn.setText("🔇  MUTED")
         else:
             _muted.clear()
             self.mute_btn.setText("🔇  MUTE")
+
+    def _on_deafen_toggle(self, checked):
+        if checked:
+            _deafened.set()
+            self.deaf_btn.setText("🎙 DEAFENED")
+        else:
+            _deafened.clear()
+            self.deaf_btn.setText("🎙 DEAFEN")
 
     def _on_interrupt_toggle(self, checked):
         if checked:
