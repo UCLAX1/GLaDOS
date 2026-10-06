@@ -4,7 +4,17 @@ UCLA X1's 2026-2027 GLaDOS project.
 
 ## Running the full pipeline
 
-Three terminals, in order:
+### Option A — GUI (recommended)
+
+One command starts everything: llama-server, the speech daemon, the listener, and
+the MuJoCo sim in a single PySide6 window.
+
+```bash
+source listening/venv/bin/activate
+python3 gui_launch.py
+```
+
+### Option B — Headless (three terminals)
 
 **Terminal 1 — Brain (Bonsai-8B via llama.cpp)**
 ```bash
@@ -22,7 +32,7 @@ source listening/venv/bin/activate
 python3 run_glados.py
 ```
 
-Speak into the mic. glados responds with audio and a MuJoCo gesture.
+Speak into the mic. GLaDOS responds with audio and a MuJoCo gesture.
 
 The pipeline is streamed end to end — each stage starts before the previous one
 finishes, so the reply begins while the model is still writing it:
@@ -37,7 +47,8 @@ per-stage distribution over the session.
 ## Structure
 
 ```
-run_glados.py           full pipeline entry point
+gui_launch.py           all-in-one GUI launcher (recommended)
+run_glados.py           headless pipeline entry point
 │
 ├── listening/
 │   └── listener.py     mic → VAD → faster-whisper → text callback
