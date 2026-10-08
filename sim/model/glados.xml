@@ -1,4 +1,4 @@
-<!-- TEMPLATE: dollar-brace tokens are filled from design_freeze_baseline.csv by sim/params.py. Load via params.load_model(). -->
+<!-- TEMPLATE: dollar-brace tokens are filled from parameter.csv by sim/params.py. Load via params.load_model(). -->
 <mujoco model="glados_arm">
 
   <compiler angle="radian"/>
@@ -32,12 +32,13 @@
     <!-- Ceiling mount point — world center -->
     <body name="ceiling_mount" pos="0 0 0">
       <geom type="box" size="0.1 0.1 0.005" material="mount"/>
-      <!-- Main swivel — rotates the whole arm left/right -->
-      <body name="main_swivel" pos="0 0 -0.005">
-        <joint name="main_swivel_joint" type="hinge" axis="0 0 1" pos="0 0 0" limited="true" range="-${swivel} ${swivel}" damping="15" armature="0.2"/>
-        <geom type="cylinder" size="0.09 0.01"/>
-        <!-- Upper arm — 518 mm, 9 kg (freeze budget), 1x1 in tube, fixed 20 degree lean -->
-          <body name="upper_arm" pos="0 0 0" euler="0 0.3491 0">
+      <!-- Swivel housing — static, flush under the mount plate -->
+      <geom type="cylinder" size="0.09 0.01" pos="0 0 -0.015"/>
+      <!-- Upper arm — shoulder = yaw (world Z) then pitch (Y), same pivot, 5 mm below mount.
+           518 mm, 9 kg (freeze budget), 1x1 in tube. Zero pose = hanging straight down. -->
+          <body name="upper_arm" pos="0 0 -0.005">
+            <joint name="upper_arm_yaw_joint" type="hinge" axis="0 0 1" pos="0 0 0" limited="true" range="-${swivel} ${swivel}" damping="15" armature="0.2"/>
+            <joint name="upper_arm_pitch_joint" type="hinge" axis="0 1 0" pos="0 0 0" limited="true" range="-${pitch} ${pitch}" damping="80" armature="0.1"/>
             <geom type="box" size="${ua_w} ${ua_w} ${ua_half}" pos="0 0 -${ua_half}" mass="${ua_mass}"/>
             <!-- Elbow joint — L1 = 518 mm below swivel -->
               <body name="lower_arm" pos="0 0 -${L1}">
@@ -75,14 +76,12 @@
                 </body>
               </body>
           </body>
-      </body>
     </body>
   </worldbody>
 
   <!-- Disable self-collision between adjacent links -->
   <contact>
-    <exclude body1="ceiling_mount"  body2="main_swivel"/>
-    <exclude body1="main_swivel"    body2="upper_arm"/>
+    <exclude body1="ceiling_mount"  body2="upper_arm"/>
     <exclude body1="upper_arm"      body2="lower_arm"/>
     <exclude body1="lower_arm"      body2="neck_platform"/>
     <exclude body1="neck_platform"  body2="head"/>
@@ -94,8 +93,9 @@
     Position-controlled actuators.
   -->
   <actuator>
-    <position name="main_swivel_actuator" joint="main_swivel_joint" kp="200" kv="20" ctrlrange="-${swivel} ${swivel}"/>
-    <position name="lower_arm_actuator"   joint="lower_arm_joint"   kp="2000" kv="150" ctrlrange="0 ${elbow}"/>
+    <position name="upper_arm_yaw_actuator" joint="upper_arm_yaw_joint" kp="200" kv="20" ctrlrange="-${swivel} ${swivel}"/>
+    <position name="upper_arm_pitch_actuator" joint="upper_arm_pitch_joint" kp="2000" kv="150" ctrlrange="-${pitch} ${pitch}"/>
+    <position name="lower_arm_actuator"  joint="lower_arm_joint"   kp="2000" kv="150" ctrlrange="0 ${elbow}"/>
     <position name="tilt_actuator"         joint="tilt_joint"         kp="200" ctrlrange="-${tilt} ${tilt}"/>
     <position name="nod_actuator"          joint="nod_joint"          kp="200" ctrlrange="-${nod} ${nod}"/>
     <position name="eye_actuator"         joint="eye_joint"          kp="200" ctrlrange="-0.002 0.002"/>

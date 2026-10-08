@@ -16,7 +16,7 @@ class ControlInterface(ABC):
     # ── Joint limits ───────────────────────────────────
     # Rotation joints in degrees, eye in mm.
 
-    LIMITS = params.LIMITS_DEG  # from sim/model/design_freeze_baseline.csv
+    LIMITS = params.LIMITS_DEG  # from sim/model/parameter.csv
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 

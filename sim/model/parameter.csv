@@ -1,5 +1,5 @@
 component,length_mm,width_mm,height_mm,rot_x_deg,rot_y_deg,rot_z_deg,mass_kg,notes
 main_swivel,,,,0,0,180,,"main_swivel_joint at ceiling mount; freeze 180 deg base rotation; dims/mass not in freeze"
-upper_arm,518,25.4,25.4,0,0,0,9,"mass is budget; rigidly attached to swivel (fixed lean, no joint); 1x1x1/8 in 6061 Al tube"
+upper_arm,518,25.4,25.4,0,60,0,9,"mass is budget; fixed 20 deg lean; rot_y = TOTAL range of upper_arm_pitch_joint (symmetric +-half), 60 is a PLACEHOLDER not in freeze; 1x1x1/8 in 6061 Al tube"
 lower_arm,230,25.4,25.4,0,90,0,4,"mass is budget; lower_arm_joint (elbow) is the 90 deg arm pitch; 2:1 bevel side-mount motors"
 head,180,,,60,60,60,3,"mass is budget; rot = TOTAL range (~30 deg each direction roll/pitch/yaw, up to ~40 physical); width/height not in freeze; 3 servo push rods + central ball joint"

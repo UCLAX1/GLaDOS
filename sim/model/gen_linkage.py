@@ -1,4 +1,6 @@
 """Rewrites the servo/rod/face part of push.xml from the measurements below.
+Exists so the three push rods come out right: each rod2 length/angle is derived
+from the real measurements (servo, horn, face corner) instead of hand-edited XML.
 Run after editing:  python model/gen_linkage.py   (then reload the sim)
 Only touches the text between the BEGIN/END gen_linkage markers in push.xml."""
 import math, os, re

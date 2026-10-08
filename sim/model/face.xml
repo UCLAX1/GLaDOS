@@ -1,0 +1,35 @@
+<!-- Standalone 220-degree head + eye. Load via params.load_model("face.xml"). No template tokens. -->
+<mujoco model="glados_face">
+
+  <compiler angle="radian"/>
+  <option timestep="0.002" gravity="0 0 0"/>
+
+  <asset>
+    <material name="body" rgba="0.95 0.93 0.90 1" shininess="0.4" specular="0.3"/>
+    <material name="eye"  rgba="1.0  0.78 0.0  1" shininess="1.0" specular="0.8" emission="0.4"/>
+    <mesh name="head_220" file="head_220.obj"/>
+  </asset>
+
+  <worldbody>
+    <light name="top" pos="0 0.3 0.5" dir="0 -0.5 -1" diffuse="0.8 0.8 0.8"/>
+
+    <body name="head" pos="0 0 0">
+      <!-- 220 deg solid arc, extruded along mesh z; euler turns mesh z into world y (same as glados.xml head). Visual only. -->
+      <geom type="mesh" mesh="head_220" euler="1.5708 0 0" mass="1" material="body" contype="0" conaffinity="0"/>
+
+      <!-- IK reference point — tip of eye -->
+      <site name="end_effector" pos="0 0 -0.08" size="0.0005" rgba="1 0 0 1"/>
+
+      <!-- Eye — extends/retracts from head -->
+      <body name="eye" pos="0 0 -0.07">
+        <joint name="eye_joint" type="slide" axis="0 0 -1" pos="0 0 0" limited="true" range="-0.002 0.002"/>
+        <geom type="cylinder" size="0.015 0.010" material="eye" contype="0" conaffinity="0"/>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <position name="eye_actuator" joint="eye_joint" kp="200" ctrlrange="-0.002 0.002"/>
+  </actuator>
+
+</mujoco>
