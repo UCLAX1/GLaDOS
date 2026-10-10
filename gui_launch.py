@@ -45,6 +45,7 @@ from listening.listener import SpeechListener
 ROOT      = pathlib.Path(__file__).parent
 GGUF      = ROOT / "central_ai/benchmarking_tools/Bonsai-8B-Q1_0.gguf"
 MODEL_XML = ROOT / "sim/model/glados.xml"
+sys.path.insert(0, str(ROOT / "sim"))
 HARDWARE  = bool(os.environ.get("GLADOS_HARDWARE"))
 LLAMA_CMD = "llama-server"
 
@@ -64,7 +65,11 @@ HOME = {"lower_arm": 20, "main_swivel": 0, "nod": 10}
 
 # ── MuJoCo ───────────────────────────────────────────────────────────────────
 
-model    = mujoco.MjModel.from_xml_path(str(MODEL_XML))
+try:
+    from sim import params as _sim_params
+    model = _sim_params.load_model("glados.xml")
+except (ImportError, Exception):
+    model = mujoco.MjModel.from_xml_path(str(MODEL_XML))
 data     = mujoco.MjData(model)
 robot    = MujocoControl(model, data)
 renderer = mujoco.Renderer(model, height=SIM_H, width=SIM_W)

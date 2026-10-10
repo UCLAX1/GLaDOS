@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""view.py — SIM ONLY. Run: mjpython demos/view.py [path/to/model.xml]"""
+"""view.py — SIM ONLY. Run: mjpython demos/view.py [model.xml name in model/]"""
 
 import sys, time, math, pathlib
 import mujoco, mujoco.viewer
 
-xml_path = sys.argv[1] if len(sys.argv) > 1 else pathlib.Path(__file__).parents[1] / "model" / "push.xml"
+sys.path.insert(0, str(pathlib.Path(__file__).parents[1]))
+import params
 
-model = mujoco.MjModel.from_xml_path(str(xml_path))
+# arg = model file name in model/ (default push.xml)
+model = params.load_model(sys.argv[1] if len(sys.argv) > 1 else "push.xml")
 data = mujoco.MjData(model)
 
 # drive any linactN_actuator present so slide motion is visible (position
