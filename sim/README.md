@@ -32,7 +32,7 @@ mjpython demos/chaos.py # hehe funny thingy
 If `python3 -m mujoco.viewer` isn't working, use `demos/view.py` instead:
 
 ```bash
-mjpython demos/view.py model/glados.xml
+mjpython demos/view.py glados.xml
 ```
 
 Must be `mjpython`, not `python3` — the passive viewer requires it on macOS.
