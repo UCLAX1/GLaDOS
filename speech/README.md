@@ -24,17 +24,37 @@ For the robot, run the daemon once at startup. It loads the model, warms up, the
 python3 speech/glados_daemon.py
 ```
 
-Any other process triggers speech by writing JSON to `/tmp/glados_request.json`:
+Any other process triggers speech by appending to the queue:
+
+```python
+from speech.speech_queue import enqueue
+enqueue("Firing neurotoxin in 3, 2, 1.", speed=0.95)
+```
+
+The daemon takes the oldest pending utterance, speaks it, and moves to the next.
+Utterances queue rather than overwrite, so a reply streamed sentence by sentence
+plays in order and nothing is dropped mid-playback.
+
+The queue is a directory of JSON files (`/tmp/glados_queue/` by default,
+`GLADOS_QUEUE_DIR` to override) written atomically, so the daemon never reads a
+half-written request. `speech_queue.py` has no heavy dependencies — importing it
+does not pull in torch or kokoro.
+
+The older single-file interface still works for one-off requests:
 
 ```python
 import json
 from pathlib import Path
-Path("/tmp/glados_request.json").write_text(
-    json.dumps({"text": "Firing neurotoxin in 3, 2, 1.", "speed": 0.95})
-)
+Path("/tmp/glados_request.json").write_text(json.dumps({"text": "The cake is a lie."}))
 ```
 
-The daemon consumes the file, speaks, then goes back to waiting. Typical latency after warmup: 0.3–0.7x real-time on Mac CPU, faster on Jetson CUDA.
+Note that a request left there is spoken whenever the daemon next starts, even
+days later — clear the file if you abort a session mid-utterance.
+
+Playback streams segment by segment as Kokoro produces them, through a single
+PortAudio stream so consecutive segments run together with no seam. If PortAudio
+is unavailable the daemon falls back to `afplay`/`aplay` per segment. Typical
+latency after warmup: 0.3–0.7x real-time on Mac CPU, faster on Jetson CUDA.
 
 ## Structure
 
@@ -42,6 +62,7 @@ The daemon consumes the file, speaks, then goes back to waiting. Typical latency
 speech/
 ├── glados_tts.py           main inference script (auto-downloads weights)
 ├── glados_daemon.py        robot speech daemon — load once, speak on demand
+├── speech_queue.py         atomic utterance queue (no heavy deps)
 ├── setup_inference.sh      one-time setup (Mac, Linux, Jetson)
 ├── config_kokoro.json      Kokoro architecture config
 │

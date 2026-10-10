@@ -66,7 +66,7 @@ From the `X1_GLaDOS/` root:
 
 ```bash
 # Simulation
-mjpython actions/run.py wave
+mjpython actions/run_action.py wave
 
 # Hardware
 GLADOS_HARDWARE=1 python3 actions/run.py wave

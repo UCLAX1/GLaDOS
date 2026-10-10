@@ -32,16 +32,19 @@ class MujocoControl(ControlInterface):
         self._qpos = {}   # joint name → qpos address  (for data.qpos)
 
         # glados.xml names actuators/joints as "{xml_name}_actuator" / "{xml_name}_joint"
+        # Joints not yet modelled are skipped so actions using the rest still run.
+        missing = []
         for name in self.LIMITS:
             xml = XML_NAME.get(name, name)
             aid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{xml}_actuator")
             jid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT,    f"{xml}_joint")
-            if aid == -1:
-                raise ValueError(f"No actuator named {name!r} in model")
-            if jid == -1:
-                raise ValueError(f"No joint named {name!r} in model")
+            if aid == -1 or jid == -1:
+                missing.append(name)
+                continue
             self._act[name]  = aid
             self._qpos[name] = self.model.jnt_qposadr[jid]
+        if missing:
+            print(f"[sim] joints not in model (skipped): {missing}")
 
     # ── Sim: viewer + stepping ─────────────────────────────────────────────────
 
@@ -84,6 +87,8 @@ class MujocoControl(ControlInterface):
         if unit not in ("deg", "rad"):
             raise ValueError(f"unit must be 'deg' or 'rad', got {unit!r}")
         for joint, value in joints.items():
+            if joint not in self._act:
+                continue   # joint not in model yet
             idx = self._act[joint]
             if joint == "eye":
                 self.data.ctrl[idx] = value / 1000.0        # mm → m
@@ -97,10 +102,10 @@ class MujocoControl(ControlInterface):
 
         Returns degrees for rotation joints, mm for the eye. Raises ValueError for unknown joint names.
         """
+        if joint not in self.LIMITS:
+            raise ValueError(f"Unknown joint {joint!r}")
         if joint not in self._qpos:
-            raise ValueError(
-                f"Unknown joint {joint!r}. Valid joints: {list(self._qpos)}"
-            )
+            return 0.0   # joint not in model yet; report neutral
 
         idx = self._qpos[joint]
         raw = self.data.qpos[idx]
