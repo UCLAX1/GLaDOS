@@ -5,23 +5,21 @@ Backend-agnostic pose sequencer. Works on sim and hardware identically.
 
 Usage
 -----
-Sim:
+Normally you don't build one yourself: write a script in actions/scripts/ and run it with
+    robot.run_action("nod")            # sim or hardware, see control/README.md
+
+By hand (sim):
     from sim.runner import GladosSim
+    from actions.sequence import Sequence
     sim = GladosSim()
-    with sim.launch() as viewer:
-        (sim.sequence(viewer)
+    with sim.launch():
+        r = sim.robot
+        (Sequence(r, tick_fn=r._tick, running_fn=r._running)
             .pose(tilt=-15, nod=15, duration=0.4)
             .pose(tilt=0,   nod=0,  duration=0.5)
             .loop())
 
-Hardware (once HardwareControl exists):
-    from control.hardware_control import HardwareControl
-    from actions.sequence import Sequence
-    robot = HardwareControl(port="/dev/ttyUSB0")
-    (Sequence(robot)
-        .pose(tilt=-15, nod=15, duration=0.4)
-        .pose(tilt=0,   nod=0,  duration=0.5)
-        .loop())
+By hand (hardware): same, with `robot = HardwareControl(...)` (its default _tick/_running work as is).
 
 The .pose() chain is identical — only the setup lines change.
 """
@@ -125,14 +123,14 @@ class Sequence:
                         j: starts[j] + (targets[j] - starts[j]) * t
                         for j in targets
                     }
-                    self._robot.move(**interp)
+                    self._robot._command(**interp)
                     self._tick()
                     if elapsed >= duration:
                         break
 
             # ── no lerp: jump to target, hold ────────────────────────────────
             else:
-                self._robot.move(**targets)
+                self._robot._command(**targets)
                 deadline = time.time() + duration
                 while time.time() < deadline:
                     if not self._is_running():
