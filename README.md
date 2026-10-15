@@ -101,4 +101,4 @@ Bonsai-8B Q1_0 at `central_ai/benchmarking_tools/Bonsai-8B-Q1_0.gguf` — 1.15 G
 Benchmarked at 100% persona consistency, 89% JSON format compliance, 1.52s avg latency.
 See `central_ai/README.md` and `central_ai/benchmarking_tools/` for the full eval suite.
 
-hi :)
+asdfapsdklfajsd
