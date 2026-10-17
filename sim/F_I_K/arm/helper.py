@@ -16,8 +16,8 @@ def _wrap(a):
 def solve(x, y, z):
     """Joint angles (yaw, pitch, lower_arm) in rad that put head_mount at (x, y, z), or None."""
     q = np.array([x, y, z + DZ])
-    lo_y, hi_y = np.deg2rad(params.LIMITS_DEG["main_swivel"])
-    lo_p, hi_p = np.deg2rad(params.LIMITS_DEG["upper_arm"])
+    lo_y, hi_y = np.deg2rad(params.LIMITS_DEG["upper_arm_yaw"])
+    lo_p, hi_p = np.deg2rad(params.LIMITS_DEG["upper_arm_pitch"])
     lo_e, hi_e = np.deg2rad(params.LIMITS_DEG["lower_arm"])
 
     # lower_arm: |q|^2 = L1^2 + L2^2 + 2 L1 L2 cos(lower_arm)
@@ -47,7 +47,7 @@ def is_reachable(x, y, z):
 if __name__ == "__main__":
     from fk import fk_head_mount
     rng = np.random.default_rng(0)
-    lim = [np.deg2rad(params.LIMITS_DEG[k]) for k in ("main_swivel", "upper_arm", "lower_arm")]
+    lim = [np.deg2rad(params.LIMITS_DEG[k]) for k in ("upper_arm_yaw", "upper_arm_pitch", "lower_arm")]
     # every point fk can produce must be reachable, and the angles must round-trip
     for _ in range(2000):
         pt = fk_head_mount(*(rng.uniform(lo, hi) for lo, hi in lim))

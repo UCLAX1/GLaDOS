@@ -17,10 +17,6 @@ import params
 from actions.sequence import TICK_RATE
 
 
-# logical joint name → name used in glados.xml (the rest match 1:1)
-XML_NAME = {"main_swivel": "upper_arm_yaw", "upper_arm": "upper_arm_pitch"}
-
-
 class MujocoControl(ControlInterface):
 
     def __init__(self, model: mujoco.MjModel | None = None, data: mujoco.MjData | None = None) -> None:
@@ -31,13 +27,12 @@ class MujocoControl(ControlInterface):
         self._act  = {}   # joint name → actuator index (for data.ctrl)
         self._qpos = {}   # joint name → qpos address  (for data.qpos)
 
-        # glados.xml names actuators/joints as "{xml_name}_actuator" / "{xml_name}_joint"
+        # glados.xml names actuators/joints as "{name}_actuator" / "{name}_joint"
         # Joints not yet modelled are skipped so actions using the rest still run.
         missing = []
         for name in self.LIMITS:
-            xml = XML_NAME.get(name, name)
-            aid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{xml}_actuator")
-            jid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT,    f"{xml}_joint")
+            aid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"{name}_actuator")
+            jid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT,    f"{name}_joint")
             if aid == -1 or jid == -1:
                 missing.append(name)
                 continue

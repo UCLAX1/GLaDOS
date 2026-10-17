@@ -11,9 +11,9 @@ Create a new file in `actions/scripts/`. The filename and function name must mat
 
 def wave(seq):
     return (seq
-        .pose(main_swivel=45, duration=0.4)
-        .pose(main_swivel=-45, duration=0.4)
-        .pose(main_swivel=0, duration=0.3))
+        .pose(upper_arm_yaw=45, duration=0.4)
+        .pose(upper_arm_yaw=-45, duration=0.4)
+        .pose(upper_arm_yaw=0, duration=0.3))
 ```
 
 That's the whole file. No imports needed.
@@ -22,8 +22,8 @@ That's the whole file. No imports needed.
 
 | Joint | What it does | Range |
 |---|---|---|
-| `main_swivel` | rotates the whole arm left/right | -90° to 90° |
-| `upper_arm` | upper arm pitch | -30° to 30° |
+| `upper_arm_yaw` | rotates the whole arm left/right | -90° to 90° |
+| `upper_arm_pitch` | upper arm pitch | -30° to 30° |
 | `lower_arm` | lower arm, bends the arm | 0° to 90° |
 | `tilt` | tilts head side to side | -30° to 30° |
 | `nod` | nods head forward/back | -30° to 30° |

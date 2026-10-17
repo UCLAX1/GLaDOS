@@ -28,7 +28,7 @@ def demo():
     assert not hasattr(MujocoControl, "_INDEX"), "_INDEX should be gone"
 
     targets = {
-        "main_swivel": 45.0,
+        "upper_arm_yaw": 45.0,
         "lower_arm":   30.0,
         "tilt":        5.0,
         "nod":         -10.0,
@@ -43,14 +43,14 @@ def demo():
         assert abs(got - target) < robot.ARRIVE_TOL, f"{joint}: expected {target}, got {got}"
 
     # same command in deg and rad must write the same ctrl
-    robot._command(main_swivel=30.0, upper_arm=-10.0, lower_arm=40.0)
+    robot._command(upper_arm_yaw=30.0, upper_arm_pitch=-10.0, lower_arm=40.0)
     deg_ctrl = data.ctrl.copy()
-    robot._command(main_swivel=math.radians(30), upper_arm=math.radians(-10), lower_arm=math.radians(40), unit="rad")
+    robot._command(upper_arm_yaw=math.radians(30), upper_arm_pitch=math.radians(-10), lower_arm=math.radians(40), unit="rad")
     assert np.allclose(deg_ctrl, data.ctrl), "deg and rad commands disagree"
 
     # move() blocks until it has arrived, no manual stepping
-    robot.move(main_swivel=-40.0, lower_arm=20.0)
-    assert abs(robot.get_position("main_swivel") + 40) < robot.ARRIVE_TOL
+    robot.move(upper_arm_yaw=-40.0, lower_arm=20.0)
+    assert abs(robot.get_position("upper_arm_yaw") + 40) < robot.ARRIVE_TOL
     assert abs(robot.get_position("lower_arm") - 20) < robot.ARRIVE_TOL
 
     try:

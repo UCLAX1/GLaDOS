@@ -24,8 +24,8 @@ L2 = _n("lower_arm", "length_mm") / 1000  # lower_arm -> head mount (m)
 
 # joint limits in deg; eye is not in the freeze
 LIMITS_DEG = {
-    "main_swivel": (-_n("main_swivel", "rot_z_deg") / 2, _n("main_swivel", "rot_z_deg") / 2),
-    "upper_arm":   (-_n("upper_arm", "rot_y_deg") / 2, _n("upper_arm", "rot_y_deg") / 2),
+    "upper_arm_yaw":   (-_n("main_swivel", "rot_z_deg") / 2, _n("main_swivel", "rot_z_deg") / 2),
+    "upper_arm_pitch": (-_n("upper_arm", "rot_y_deg") / 2, _n("upper_arm", "rot_y_deg") / 2),
     "lower_arm":   (0.0, _n("lower_arm", "rot_y_deg")),
     "tilt":        (-_n("head", "rot_x_deg") / 2, _n("head", "rot_x_deg") / 2),
     "nod":         (-_n("head", "rot_y_deg") / 2, _n("head", "rot_y_deg") / 2),
@@ -36,7 +36,7 @@ LIMITS_DEG = {
 def _vars():
     r = lambda k: math.radians(LIMITS_DEG[k][1])
     return dict(
-        swivel=r("main_swivel"), pitch=r("upper_arm"), lower_arm=r("lower_arm"), tilt=r("tilt"), nod=r("nod"),
+        swivel=r("upper_arm_yaw"), pitch=r("upper_arm_pitch"), lower_arm=r("lower_arm"), tilt=r("tilt"), nod=r("nod"),
         L1=L1, L2=L2, ua_half=L1 / 2, la_half=L2 / 2,
         ua_w=_n("upper_arm", "width_mm") / 2000, la_w=_n("lower_arm", "width_mm") / 2000,
         ua_mass=_n("upper_arm", "mass_kg"), la_mass=_n("lower_arm", "mass_kg"),

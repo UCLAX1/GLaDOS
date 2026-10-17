@@ -26,7 +26,7 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
         speed = 1.0 + t * 0.5
 
         robot._command(   # streams a new goal every tick; move() would block on each one
-            main_swivel = 180.0 * ramp * math.sin(speed * 2.1 * t + 0.0),
+            upper_arm_yaw = 180.0 * ramp * math.sin(speed * 2.1 * t + 0.0),
             lower_arm   =  60.0 * ramp * math.sin(speed * 3.7 * t + 1.2),  # negative clamped to 0
             tilt        =  15.0 * ramp * math.sin(speed * 5.3 * t + 2.4),
             nod         =  20.0 * ramp * math.sin(speed * 4.1 * t + 0.8),
