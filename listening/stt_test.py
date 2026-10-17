@@ -75,16 +75,17 @@ if __name__ == '__main__':
     model_type = "parakeet"
 
     # be careful running the realtime model with parakeet since it takes up a lot of ram
-    realtime_model_type = "distil-small.en"
-    # realtime_model_type = "parakeet"
+    # realtime_model_type = "distil-small.en"
+    realtime_model_type = "parakeet"
 
     recorder = Recorder(
         transcriber_device=transcriber_device,
         vad_device=vad_device,
         language="en",
         enable_realtime_transcription=True,
+        enable_final_and_realtime_transcription=True,
         # enable_realtime_transcription=False,
-        enable_early_transcription=True,
+        # enable_early_transcription=True,
         # enable_early_transcription=False,
         transcriber_model_type=model_type,
         on_transcription_update_callback=on_transcription_update,
