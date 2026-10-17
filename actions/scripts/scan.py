@@ -1,5 +1,5 @@
 def scan(seq):
     return (seq
-        .pose(main_swivel=180, duration=3)
-        .pose(main_swivel=-180, duration=6)
+        .pose(upper_arm_yaw=180, duration=3)
+        .pose(upper_arm_yaw=-180, duration=6)
         )

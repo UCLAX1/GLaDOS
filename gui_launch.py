@@ -61,7 +61,7 @@ GESTURE_MAP = {
     "nod":             "nod",
     "idle":            None,
 }
-HOME = {"lower_arm": 20, "main_swivel": 0, "nod": 10}
+HOME = {"lower_arm": 20, "upper_arm_yaw": 0, "nod": 10}
 
 # ── MuJoCo ───────────────────────────────────────────────────────────────────
 

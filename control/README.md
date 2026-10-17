@@ -23,7 +23,7 @@ from sim.runner import GladosSim
 
 sim = GladosSim()
 with sim.launch():                                                 # opens the viewer
-    sim.robot.move(main_swivel=45, lower_arm=30)                   # joint angles, degrees
+    sim.robot.move(upper_arm_yaw=45, lower_arm=30)                   # joint angles, degrees
     sim.robot.move(position=(-0.3, 0.1, -0.55), unit="cart_pos")   # a point in space (inverse kinematics)
     sim.robot.move(tilt=-15, nod=10)                               # head
     sim.robot.run_action("nod", loop=True)                         # play an emote until the window closes
@@ -38,8 +38,8 @@ a command outside the range silently stops at the edge.
 
 | name | what it moves | XML joint | range |
 |---|---|---|---|
-| `main_swivel` | whole arm yaw, about vertical | `upper_arm_yaw_joint` | ±90° |
-| `upper_arm` | upper arm pitch | `upper_arm_pitch_joint` | ±30° (placeholder) |
+| `upper_arm_yaw` | whole arm yaw, about vertical | `upper_arm_yaw_joint` | ±90° |
+| `upper_arm_pitch` | upper arm pitch | `upper_arm_pitch_joint` | ±30° (placeholder) |
 | `lower_arm` | lower arm | `lower_arm_joint` | 0..90° |
 | `tilt` | head roll (side to side) | `tilt_joint` | ±30° |
 | `nod` | head pitch | `nod_joint` | ±30° |
@@ -52,7 +52,7 @@ reads back as 0, so actions using the other joints still run.
 ## `move()`: go there, then return
 
 ```python
-robot.move(*, timeout=3.0, main_swivel=, upper_arm=, lower_arm=, tilt=, nod=, eye=, unit="deg", position=)
+robot.move(*, timeout=3.0, upper_arm_yaw=, upper_arm_pitch=, lower_arm=, tilt=, nod=, eye=, unit="deg", position=)
 ```
 
 - Pass only the joints you want to move; the rest stay where they are.
@@ -64,7 +64,7 @@ robot.move(*, timeout=3.0, main_swivel=, upper_arm=, lower_arm=, tilt=, nod=, ey
 |---|---|
 | `"deg"` (default) | rotation joints in degrees, eye in mm |
 | `"rad"` | rotation joints in radians, eye still mm |
-| `"cart_pos"` | `position=(x, y, z)` in **meters**: where `head_mount` should go. IK picks `main_swivel`/`upper_arm`/`lower_arm` (so don't pass those, it raises). `tilt`/`nod` still in degrees. **Raises `ValueError` if the point is unreachable** |
+| `"cart_pos"` | `position=(x, y, z)` in **meters**: where `head_mount` should go. IK picks `upper_arm_yaw`/`upper_arm_pitch`/`lower_arm` (so don't pass those, it raises). `tilt`/`nod` still in degrees. **Raises `ValueError` if the point is unreachable** |
 
 Cartesian frame: origin at the ceiling mount, z up, so targets have negative z. Reachable points sit 570–753 mm
 from the upper arm, in a bowl below it. `(-0.3, 0.1, -0.55)` and `(-0.2, -0.15, -0.6)` are safe examples.
@@ -109,9 +109,9 @@ An action is one function that chains `.pose()` / `.wait()` calls:
 # actions/scripts/wave.py  (filename == function name, no imports)
 def wave(seq):
     return (seq
-        .pose(main_swivel=45,  duration=0.4)
-        .pose(main_swivel=-45, duration=0.4)
-        .pose(main_swivel=0,   duration=0.3))
+        .pose(upper_arm_yaw=45,  duration=0.4)
+        .pose(upper_arm_yaw=-45, duration=0.4)
+        .pose(upper_arm_yaw=0,   duration=0.3))
 ```
 
 `.pose()` options: `duration` (s, default 0.5), `lerp` (smoothstep ease in/out, default on; off = jump and hold),

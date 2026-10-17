@@ -14,7 +14,7 @@ from helper import solve
 
 
 def ik(x: float, y: float, z: float) -> tuple[float, float, float]:
-    """(main_swivel, upper_arm, lower_arm) in rad for head_mount at (x, y, z) m; raises if unreachable."""
+    """(upper_arm_yaw, upper_arm_pitch, lower_arm) in rad for head_mount at (x, y, z) m; raises if unreachable."""
     ang = solve(x, y, z)
     if ang is None:
         raise ValueError(f"({x}, {y}, {z}) is outside the arm's reach")
@@ -51,23 +51,23 @@ class ControlInterface(ABC):
         All values are clamped to joint limits. Blocks, ticking, until every commanded joint is within
         ARRIVE_TOL of its target (or `timeout` seconds pass, or the sim window closes).
 
-        Joints: main_swivel, upper_arm, lower_arm, tilt, nod, eye.
+        Joints: upper_arm_yaw, upper_arm_pitch, lower_arm, tilt, nod, eye.
         Units:  rotation joints in `unit` ("deg" default, or "rad"), eye always mm.
         unit="cart_pos": pass position=(x, y, z) in meters (head_mount, from the top of the upper
-        arm, z negative = below). ik picks main_swivel/upper_arm/lower_arm, so don't pass those;
+        arm, z negative = below). ik picks upper_arm_yaw/upper_arm_pitch/lower_arm, so don't pass those;
         tilt/nod stay in degrees. Raises ValueError if the point is unreachable.
 
         Examples:
             robot.move(tilt=-15, nod=10)
-            robot.move(main_swivel=90, lower_arm=30, tilt=5, nod=-10, eye=1.5)
+            robot.move(upper_arm_yaw=90, lower_arm=30, tilt=5, nod=-10, eye=1.5)
             robot.move(position=(-0.3, 0.1, -0.55), unit="cart_pos")
         """
         self._wait_until_reached(self._command(**kwargs), timeout)
 
     def _command(
         self,
-        main_swivel: float | None = None,
-        upper_arm:   float | None = None,
+        upper_arm_yaw: float | None = None,
+        upper_arm_pitch:   float | None = None,
         lower_arm:   float | None = None,
         tilt:        float | None = None,
         nod:         float | None = None,
@@ -82,17 +82,17 @@ class ControlInterface(ABC):
         if unit == "cart_pos":
             if position is None:
                 raise ValueError("unit='cart_pos' needs position=(x, y, z)")
-            if any(v is not None for v in (main_swivel, upper_arm, lower_arm)):
-                raise ValueError("unit='cart_pos' picks main_swivel/upper_arm/lower_arm itself")
-            main_swivel, upper_arm, lower_arm = ik(*position)
+            if any(v is not None for v in (upper_arm_yaw, upper_arm_pitch, lower_arm)):
+                raise ValueError("unit='cart_pos' picks upper_arm_yaw/upper_arm_pitch/lower_arm itself")
+            upper_arm_yaw, upper_arm_pitch, lower_arm = ik(*position)
             tilt, nod = (None if v is None else math.radians(v) for v in (tilt, nod))
             unit = "rad"
         elif position is not None:
             raise ValueError("position only works with unit='cart_pos'")
 
         updates = {
-            "main_swivel": main_swivel,
-            "upper_arm":   upper_arm,
+            "upper_arm_yaw": upper_arm_yaw,
+            "upper_arm_pitch":   upper_arm_pitch,
             "lower_arm":   lower_arm,
             "tilt":        tilt,
             "nod":         nod,
