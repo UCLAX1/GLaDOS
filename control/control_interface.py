@@ -20,6 +20,11 @@ def ik(x: float, y: float, z: float) -> tuple[float, float, float]:
         raise ValueError(f"({x}, {y}, {z}) is outside the arm's reach")
     return ang
 
+def _smoothstep(t: float) -> float:
+    """Ease in/out: slow start, fast middle, slow end. t in [0, 1]."""
+    t = max(0.0, min(1.0, t))
+    return t * t * (3.0 - 2.0 * t)
+
 
 class ControlInterface(ABC):
 
@@ -64,6 +69,7 @@ class ControlInterface(ABC):
         """
         self._wait_until_reached(self._command(**kwargs), timeout)
 
+
     def pose(self, 
         *,
         duration: float = 0.5,
@@ -71,19 +77,37 @@ class ControlInterface(ABC):
         timeout: float = 3.0,
         **kwargs
     ):
-        joints = [
-            "main_swivel", 
-            "upper_arm", 
-            "lower_arm",
-        ]
+        print(**kwargs)
+        # joints = [
+        #     "main_swivel", 
+        #     "upper_arm", 
+        #     "lower_arm",
+        # ]
+        # starts  = {j: self._robot.get_position(j) for j in joints}
+        # t_start = time.time()
+        # while True:
+        #     if not self._running():
+        #         return self
+        #     elapsed = time.time() - t_start
+        #     t       = _smoothstep(elapsed / max(duration, 1e-6))
+        #     interp  = {
+        #         j: starts[j] + (targets[j] - starts[j]) * t
+        #         for j in targets
+        #     }
+        #     self._command(**interp)
+        #     self._tick()
+        #     if elapsed >= duration:
+        #         break
 
-        current_joint_positions = (self.get_position(joint) for joint in joints)
 
-        current_position = ik(*current_joint_positions)
+        # current_joint_positions = (self.get_position(joint) for joint in joints)
 
-        # target_position = 
+        # current_position = ik(*current_joint_positions)
 
-        print(f"current position: {current_position}")
+        # # target_position = **kwargs
+        # print(**kwargs)
+
+        # print(f"current position: {current_position}")
 
 
     def _command(
