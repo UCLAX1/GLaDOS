@@ -64,6 +64,28 @@ class ControlInterface(ABC):
         """
         self._wait_until_reached(self._command(**kwargs), timeout)
 
+    def pose(self, 
+        *,
+        duration: float = 0.5,
+        lerp: bool = True,
+        timeout: float = 3.0,
+        **kwargs
+    ):
+        joints = [
+            "main_swivel", 
+            "upper_arm", 
+            "lower_arm",
+        ]
+
+        current_joint_positions = (self.get_position(joint) for joint in joints)
+
+        current_position = ik(*current_joint_positions)
+
+        # target_position = 
+
+        print(f"current position: {current_position}")
+
+
     def _command(
         self,
         main_swivel: float | None = None,
