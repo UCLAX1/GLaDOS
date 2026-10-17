@@ -43,57 +43,82 @@ def register_person(name, frame):
     print(f"Saved face for {name}")
 
 
-def recognize_person(frame, threshold=0.5):
-    embedding = get_face_embedding(frame)
-    if embedding is None:
-        return "unknown"
-    best_name = "unknown"
-    best_score = 0
-    for filename in os.listdir(FACES_DIR):
-        if not filename.endswith(".npy"):
-            continue
 
-        known_embedding = np.load(
-            os.path.join(FACES_DIR, filename)
-        )
-        score = np.dot(
-            embedding,
-            known_embedding
-        )
-        if score > best_score:
-            best_score = score
-            best_name = filename.replace(".npy", "")
-    if best_score >= threshold:
-        return best_name
-    return "unknown"
+def recognize_person(frame, threshold=0.5):
+    faces = app.get(frame)
+    results = []
+
+    for face in faces:
+        embedding = face.normed_embedding
+        best_name = "unknown"
+        best_score = -1
+
+        for filename in os.listdir(FACES_DIR):
+            if not filename.endswith(".npy"):
+                continue
+
+            known_embedding = np.load(
+                os.path.join(FACES_DIR, filename)
+            )
+
+            score = np.dot(embedding, known_embedding)
+
+            if score > best_score:
+                best_score = score
+                best_name = filename.replace(".npy", "")
+
+        if best_score < threshold:
+            best_name = "unknown"
+
+        bbox = face.bbox.astype(int)
+        results.append((best_name, bbox, best_score))
+
+    return results
+
 
 
 cap = cv2.VideoCapture(0)
 print("Press R to register your face")
 print("Press SPACE to recognize")
 
+
 while True:
     ret, frame = cap.read()
     if not ret:
         break
-    cv2.imshow(
-        "GLaDOS Face Recognition",
-        frame
-    )
-    key = cv2.waitKey(1) & 0xFF
-    # register the face 
-    if key == ord("r"):
-        name = input("Enter name: ")
-        register_person(
-            name,
-            frame
+
+    # Recognize every face in each frame
+    results = recognize_person(frame)
+
+    for name, bbox, score in results:
+        x1, y1, x2, y2 = bbox
+
+        color = (0, 255, 0) if name != "unknown" else (0, 165, 255)
+
+        cv2.rectangle(
+            frame, (x1, y1), (x2, y2), color, 2
         )
 
-    elif key == ord(" "):
-        name = recognize_person(frame)
-        print(
-            f"Recognized: {name}"
+        cv2.putText(
+            frame,
+            name,
+            (x1, max(y1 - 10, 20)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            color,
+            2
         )
+
+    cv2.imshow("GLaDOS Face Recognition", frame)
+
+    key = cv2.waitKey(1) & 0xFF
+
+    if key == ord("r"):
+        name = input("Enter name: ")
+        register_person(name, frame)
+
+    elif key == ord("q"):
+        break
 
 cap.release()
 cv2.destroyAllWindows()
