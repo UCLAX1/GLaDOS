@@ -46,7 +46,7 @@ def sim_head_mount(theta_z_deg: float, theta_p_deg: float, theta_y_deg: float):
     model = params.load_model()
     data = mujoco.MjData(model)
 
-    # qpos order follows joint order in glados.xml: yaw, pitch, elbow
+    # qpos order follows joint order in glados.xml: yaw, pitch, lower_arm
     data.qpos[0] = np.deg2rad(theta_z_deg)
     data.qpos[1] = np.deg2rad(theta_p_deg)
     data.qpos[2] = np.deg2rad(theta_y_deg)
@@ -61,7 +61,7 @@ if __name__ == "__main__":
     rng = np.random.default_rng(0)
     cases += [tuple(rng.uniform(-30, 30, 3)) for _ in range(20)]
     for z, p, y in cases:
-        y = abs(y)  # elbow range is 0..total
+        y = abs(y)  # lower_arm range is 0..total
         sim_pos, fk_pos = sim_head_mount(z, p, y)
         print((z, p, y), "sim:", sim_pos, "fk:", fk_pos)
         assert np.allclose(sim_pos, fk_pos, atol=1e-6), "fk != sim"

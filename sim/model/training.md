@@ -26,16 +26,16 @@ implies.
 
 ## Top-level sections of the file
 
-| Section         | What it's for                                                                                                                                                                                                        |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `<compiler>`  | <br /><br />Global parsing settings.`angle="radian"` means every angle in this file (joint ranges, `euler=...`) is in radians, not degrees.                                                                      |
-| `<visual>`    | Viewer-only cosmetics — here, how big the little joint-axis arrows are drawn.                                                                                                                                       |
-| `<option>`    | <br />Physics engine settings:`timestep` (simulation step size, seconds) and `gravity`.                                                                                                                          |
-| `<asset>`     | Reusable resources, here just`<material>`s (color/shininess) referenced by name later.<br /><br />If you are familar with unity very much like the materials that you put onto game objects which in our case is  |
-| `<default>`   | Fallback attributes so you don't repeat yourself. Any`<joint>` here gets `damping="0.5"`, any `<geom>` gets `material="body"`, unless overridden locally.                                                    |
-| `<worldbody>` | The actual tree of bodies — this is the robot.                                                                                                                                                                      |
-| `<contact>`   | Collision rules (see below).                                                                                                                                                                                         |
-| `<actuator>`  | The motors that drive the joints.                                                                                                                                                                                    |
+| Section         | What it's for                                                                                                                                                                                                                                                  |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<compiler>`  | <br /><br />Global parsing settings.`angle="radian"` means every angle in this file (joint ranges, `euler=...`) is in radians, not degrees.                                                                                                                |
+| `<visual>`    | Viewer-only cosmetics — here, how big the little joint-axis arrows are drawn.                                                                                                                                                                                 |
+| `<option>`    | <br />Physics engine settings:`timestep` (simulation step size, seconds) and `gravity`.                                                                                                                                                                    |
+| `<asset>`     | Reusable resources, here just`<material>`s (color/shininess) referenced by name later.<br /><br />If you are familiar with Unity, these are very much like the materials you put onto game objects — here they get applied to geoms via `material="..."`. |
+| `<default>`   | Fallback attributes so you don't repeat yourself. Any`<joint>` here gets `damping="0.5"`, any `<geom>` gets `material="body"`, unless overridden locally.                                                                                              |
+| `<worldbody>` | The actual tree of bodies — this is the robot.                                                                                                                                                                                                                |
+| `<contact>`   | Collision rules (see below).                                                                                                                                                                                                                                   |
+| `<actuator>`  | The motors that drive the joints.                                                                                                                                                                                                                              |
 
 ## Anatomy of one body
 
@@ -49,32 +49,37 @@ implies.
 
 - **`<body>`** — a rigid link. `pos` is its offset from its *parent's* frame (not the world origin).
   So `lower_arm` sits 0.1m below and 0.01m behind wherever `upper_arm` ends up.
+  All lengths are in **meters** (MuJoCo has no fixed units; `gravity="0 0 -9.81"` implies SI).
 - **`<joint>`** — how this body is allowed to move relative to its parent. No joint = welded rigidly
   to the parent (that's why `upper_arm` never moves independently of `main_swivel`).
   - `type="hinge"` — rotates around an axis, like a door hinge. `axis="0 1 0"` = rotates about Y.
   - `type="slide"` — moves in a straight line instead of rotating (used once, for the eye).
   - `range="-1.047 1.047"` — motion limits in radians (≈ ±60°), enforced because `limited="true"`.
-  - `pos = "0 0 0.04"`- shows you the point where the object pivots about. 0 0 0 represents the center of the object but in this case we are pivoting around the top of the lower arm
+  - `pos="0 0 0.04"` — the point the body pivots about, in the body's own frame. `0 0 0` (the default) is the
+    body origin, which is also the geom's center only when the geom has no `pos` of its own. Here the pivot is
+    moved 0.04m up so the lower arm swings from its top end.
 - **`<geom>`** — the visible/collidable shape for this body (ellipsoid, cylinder, box, plane, ...).
-  Purely cosmetic/collision — it has no effect on the kinematics above.
+  It doesn't affect the kinematics above, but it does set the body's mass/inertia (computed from geom
+  volume) unless you give an explicit `<inertial>`. A primitive geom's `pos` is its **center**, so to put the
+  pivot at the end of a 1m box along Z use `size="... ... 0.5" pos="0 0 0.5"` (or `-0.5` to hang down).
 
 ## Geom types: what `size` and `euler` actually mean
 
 The catch with `size`: for every type except `mesh`, the numbers are **half-extents/radii, not full
 lengths**. A box with `size="0.1 0.1 0.1"` is a 0.2m cube, not a 0.1m cube.
 
-| `type`      | `size` = (in order)                                                                     | Notes                                                                                                                                   |
-| ------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `plane`     | half-width X, half-width Y, spacing                                                       | Set X or Y to`0` for an infinite plane in that direction. `spacing` is just the visual grid line spacing — doesn't affect physics. |
-| `sphere`    | radius                                                                                    | One number.                                                                                                                             |
-| `capsule`   | radius, half-length                                                                       | A cylinder with rounded (hemisphere) caps.`half-length` is the straight part only, caps add on top of that.                           |
-| `cylinder`  | radius, half-height                                                                       | Flat-ended, no rounded caps. E.g. the horn in`push.xml`: `size="0.05 0.01"` = 0.05m radius, 0.02m tall disc.                        |
-| `box`       | half-x, half-y, half-z                                                                    | Half-extents along each local axis.                                                                                                     |
-| `ellipsoid` | semi-x, semi-y, semi-z                                                                    | Like a box's half-extents but for a squashed sphere — each number is the radius along that axis.                                       |
-| `mesh`      | (none — shape comes from the referenced mesh file, optionally with one uniform`scale`) |                                                                                                                                         |
+| `type`      | `size` = (in order)                                                                                                                                                   | Notes                                                                                                                                   |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `plane`     | half-width X, half-width Y, spacing                                                                                                                                     | Set X or Y to`0` for an infinite plane in that direction. `spacing` is just the visual grid line spacing — doesn't affect physics. |
+| `sphere`    | radius                                                                                                                                                                  | One number.                                                                                                                             |
+| `capsule`   | radius, half-length                                                                                                                                                     | A cylinder with rounded (hemisphere) caps.`half-length` is the straight part only, caps add on top of that.                           |
+| `cylinder`  | radius, half-height                                                                                                                                                     | Flat-ended, no rounded caps. E.g. the horn in`push.xml`: `size="0.05 0.01"` = 0.05m radius, 0.02m tall disc.                        |
+| `box`       | half-x, half-y, half-z                                                                                                                                                  | Half-extents along each local axis.                                                                                                     |
+| `ellipsoid` | semi-x, semi-y, semi-z                                                                                                                                                  | Like a box's half-extents but for a squashed sphere — each number is the radius along that axis.                                       |
+| `mesh`      | (none — shape comes from the referenced mesh file, scaled per-axis with`scale="x y z"` on the `<mesh>` asset — use `0.001 0.001 0.001` for STLs exported in mm) |                                                                                                                                         |
 
 `capsule` and `cylinder` can also skip `pos`/`euler` entirely and instead use
-`fromto="x1 y1 z1 x2 y2 z2"` (two endpoints in the parent frame) — then `size` only needs the
+`fromto="x1 y1 z1 x2 y2 z2"` (two endpoints in the containing body's frame) — then `size` only needs the
 radius, since the length is implied by the two points. Handy for rods/struts.
 
 **`euler`** sets a geom's (or body's) rotation as three angles applied in X, then Y, then Z order
@@ -86,17 +91,18 @@ compounds rounding across three rotations.
 
 **Converting degrees ↔ radians** (needed any time you're editing `euler`/joint `range` in this
 file, since `<compiler angle="radian">` means every angle here is in radians):
+
 - degrees → radians: `degrees * π/180`. E.g. `45 * π/180 ≈ 0.785 rad`.
 - radians → degrees: `radians * 180/π` (180/π ≈ 57.2958). E.g. `0.3 * 57.2958 ≈ 17.2°`.
 
 | degrees | radians |
 | ------- | ------- |
-| 15°     | 0.262   |
-| 30°     | 0.524   |
-| 45°     | 0.785   |
-| 60°     | 1.047   |
-| 90°     | 1.571   |
-| 180°    | 3.142   |
+| 15°    | 0.262   |
+| 30°    | 0.524   |
+| 45°    | 0.785   |
+| 60°    | 1.047   |
+| 90°    | 1.571   |
+| 180°   | 3.142   |
 
 **To look things up yourself:**
 
@@ -113,7 +119,7 @@ file, since `<compiler angle="radian">` means every angle here is in radians):
 | Joint                 | Type  | Axis | Range   | What it does                                         |
 | --------------------- | ----- | ---- | ------- | ---------------------------------------------------- |
 | `main_swivel_joint` | hinge | Z    | ±180° | Whole arm swivels left/right, like a lazy-susan base |
-| `lower_arm_joint`   | hinge | Y    | ±60°  | Elbow — pitches the lower arm up/down               |
+| `lower_arm_joint`   | hinge | Y    | ±60°  | Lower arm — pitches the lower arm up/down               |
 | `neck_joint`        | hinge | X    | ±45°  | Rotates the head side-to-side (roll)                 |
 | `head_joint`        | hinge | Y    | ±57°  | Nods the head up/down (pitch)                        |
 | `eye_joint`         | slide | Z    | ±2mm   | Eye pokes in/out a couple millimeters                |
