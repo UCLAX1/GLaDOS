@@ -1,7 +1,7 @@
 """Freeze parameters from model/parameter.csv -> glados.xml + joint limits.
 
 glados.xml and push.xml are string.Templates; load with load_model(name), not from_xml_path.
-rot_* columns are TOTAL range in deg: swivel/head are symmetric (+-half), elbow is 0..total.
+rot_* columns are TOTAL range in deg: swivel/head are symmetric (+-half), lower_arm is 0..total.
 """
 import csv, math, pathlib
 from string import Template
@@ -19,8 +19,8 @@ def _n(comp, col):
     return float(P[comp][col])
 
 
-L1 = _n("upper_arm", "length_mm") / 1000  # swivel -> elbow (m)
-L2 = _n("lower_arm", "length_mm") / 1000  # elbow -> head mount (m)
+L1 = _n("upper_arm", "length_mm") / 1000  # swivel -> lower_arm (m)
+L2 = _n("lower_arm", "length_mm") / 1000  # lower_arm -> head mount (m)
 
 # joint limits in deg; eye is not in the freeze
 LIMITS_DEG = {
@@ -36,7 +36,7 @@ LIMITS_DEG = {
 def _vars():
     r = lambda k: math.radians(LIMITS_DEG[k][1])
     return dict(
-        swivel=r("main_swivel"), pitch=r("upper_arm"), elbow=r("lower_arm"), tilt=r("tilt"), nod=r("nod"),
+        swivel=r("main_swivel"), pitch=r("upper_arm"), lower_arm=r("lower_arm"), tilt=r("tilt"), nod=r("nod"),
         L1=L1, L2=L2, ua_half=L1 / 2, la_half=L2 / 2,
         ua_w=_n("upper_arm", "width_mm") / 2000, la_w=_n("lower_arm", "width_mm") / 2000,
         ua_mass=_n("upper_arm", "mass_kg"), la_mass=_n("lower_arm", "mass_kg"),

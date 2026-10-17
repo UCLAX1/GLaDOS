@@ -110,3 +110,5 @@ test*.wav
 
 #sim
 videos/
+sim/F_I_K/arm/README.md
+sim/F_I_K/push_rod/README.md
