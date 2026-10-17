@@ -142,15 +142,24 @@ class ControlInterface(ABC):
 
     # ── Actions ───────────────────────────────────────────────────────────────
 
-    def run_action(self, name: str, loop: bool = False) -> None:
+    def run_action(self, name: str | None = None, loop: bool = False, **pose_kwargs) -> None:
         """
-        Play an emote from actions/scripts/{name}.py (once, or until stopped if loop=True).
+        Play a named emote or a single pose (once, or until stopped if loop=True).
 
         Example:
-            robot.run_action("nod")
+            robot.run_action("nod", loop=True)
+            robot.run_action(nod=20, duration=0.3, loop=True)
         """  
-        fn = getattr(importlib.import_module(f"actions.scripts.{name}"), name)
-        seq = fn(Sequence(self, tick_fn=self._tick, running_fn=self._running))
+        if name is not None:
+            if pose_kwargs:
+                raise ValueError("Pass either an action name or pose arguments, not both")
+            fn = getattr(importlib.import_module(f"actions.scripts.{name}"), name)
+            seq = fn(Sequence(self, tick_fn=self._tick, running_fn=self._running))
+        elif pose_kwargs:
+            seq = Sequence(self, tick_fn=self._tick, running_fn=self._running).pose(**pose_kwargs)
+        else:
+            raise ValueError("Pass an action name or at least one pose argument")
+
         seq.loop() if loop else seq.play()
 
     # ── Tick hooks (override in subclass if time has to be advanced by hand) ──
