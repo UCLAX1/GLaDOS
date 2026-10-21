@@ -29,26 +29,26 @@
     <light name="top" pos="0 0 2" dir="0 0 -1" diffuse="0.8 0.8 0.8"/>
     <geom name="floor" type="plane" size="2 2 0.1" pos="0 0 -1.1" rgba="0.3 0.3 0.3 0.5"/>
 
-    <!-- Ceiling mount point — world center -->
+    <!-- Ceiling mount point - world center -->
     <body name="ceiling_mount" pos="0 0 0">
       <geom type="box" size="0.1 0.1 0.005" material="mount"/>
-      <!-- Swivel housing — static, flush under the mount plate -->
+      <!-- Swivel housing - static, flush under the mount plate -->
       <geom type="cylinder" size="0.09 0.01" pos="0 0 -0.015"/>
-      <!-- Upper arm — yaw (world Z) then pitch (Y), same pivot, 5 mm below mount.
+      <!-- Upper arm - yaw (world Z) then pitch (Y), same pivot, 5 mm below mount.
            518 mm, 9 kg (freeze budget), 1x1 in tube. Zero pose = hanging straight down. -->
           <body name="upper_arm" pos="0 0 -0.005">
             <joint name="upper_arm_yaw_joint" type="hinge" axis="0 0 1" pos="0 0 0" limited="true" range="-${swivel} ${swivel}" damping="15" armature="0.2"/>
             <joint name="upper_arm_pitch_joint" type="hinge" axis="0 1 0" pos="0 0 0" limited="true" range="-${pitch} ${pitch}" damping="80" armature="0.1"/>
             <geom type="box" size="${ua_w} ${ua_w} ${ua_half}" pos="0 0 -${ua_half}" mass="${ua_mass}"/>
-            <!-- Lower arm joint — L1 = 518 mm below swivel -->
+            <!-- Lower arm joint - L1 = 518 mm below swivel -->
               <body name="lower_arm" pos="0 0 -${L1}">
                 <joint name="lower_arm_joint" type="hinge" axis="0 1 0" pos="0 0 0" limited="true" range="0 ${lower_arm}" damping="80" armature="0.1"/>
-                <!-- Lower arm — L2 = 230 mm, 4 kg (freeze budget), 1x1 in tube -->
+                <!-- Lower arm - L2 = 230 mm, 4 kg (freeze budget), 1x1 in tube -->
                 <geom type="box" size="${la_w} ${la_w} ${la_half}" pos="0 0 -${la_half}" mass="${la_mass}"/>
                   <site name="head_mount" pos="0 0 -${L2}" size="0.01" rgba="1 0 0 1"/>
 
                 <!--
-                  Push-rod platform — 0.23m (L2) below lower arm.
+                  Push-rod platform - 0.23m (L2) below lower arm.
                   Both tilt joints (neck = side tilt, head = nod) share this single pivot point,
                   The head/eye assembly hangs below this pivot by the rod length.
                 -->
@@ -57,16 +57,16 @@
                   <joint name="nod_joint"  type="hinge" axis="0 1 0" pos="0 0 -0.03" limited="true" range="-${nod} ${nod}" damping="5" armature="0.01"/>
                   <geom type="sphere" size="0.015" pos="0 0 -0.03" rgba="0.3 0.3 0.3 1"/>
 
-                  <!-- Head/eye assembly — L3=0.18m total from neck_platform to eye tip -->
+                  <!-- Head/eye assembly - L3=0.18m total from neck_platform to eye tip -->
                   <!-- neck_platform→head: 0.10m  +  head→eye: 0.07m  +  eye half-height: 0.01m = 0.18m -->
                   <!-- TODO: tune head pos z once rod length is measured from real hardware -->
                   <body name="head" pos="0 0 -0.10">
                     <geom type="cylinder" size="0.07 0.04" euler="1.5708 0 0" mass="${head_mass}"/>
 
-                    <!-- IK reference point — tip of eye -->
+                    <!-- IK reference point - tip of eye -->
                     <site name="end_effector" pos="0 0 -0.08" size="0.0005" rgba="1 0 0 1"/>
 
-                    <!-- Eye — extends/retracts from head -->
+                    <!-- Eye - extends/retracts from head -->
                     <body name="eye" pos="0 0 -0.07">
                       <joint name="eye_joint" type="slide" axis="0 0 -1" pos="0 0 0" limited="true" range="-0.002 0.002"/>
                       <geom type="cylinder" size="0.015 0.010" material="eye"/>
@@ -93,12 +93,13 @@
     Position-controlled actuators.
   -->
   <actuator>
-    <position name="upper_arm_yaw_actuator" joint="upper_arm_yaw_joint" kp="200" kv="20" ctrlrange="-${swivel} ${swivel}"/>
-    <position name="upper_arm_pitch_actuator" joint="upper_arm_pitch_joint" kp="2000" kv="150" ctrlrange="-${pitch} ${pitch}"/>
-    <position name="lower_arm_actuator"  joint="lower_arm_joint"   kp="2000" kv="150" ctrlrange="0 ${lower_arm}"/>
+    <motor name="upper_arm_yaw_motor" joint="upper_arm_yaw_joint" gear="40" ctrlrange="-1 1" forcerange="-40 40"/>
+    <motor name="upper_arm_pitch_motor" joint="upper_arm_pitch_joint" gear="110" ctrlrange="-1 1" forcerange="-110 110"/>
+    <motor name="lower_arm_motor" joint="lower_arm_joint" gear="18.32" ctrlrange="-1 1" forcerange="-18.32 18.32"/>
     <position name="tilt_actuator"         joint="tilt_joint"         kp="200" ctrlrange="-${tilt} ${tilt}"/>
     <position name="nod_actuator"          joint="nod_joint"          kp="200" ctrlrange="-${nod} ${nod}"/>
     <position name="eye_actuator"         joint="eye_joint"          kp="200" ctrlrange="-0.002 0.002"/>
   </actuator>
 
 </mujoco>
+
