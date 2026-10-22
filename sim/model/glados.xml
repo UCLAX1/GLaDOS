@@ -37,7 +37,7 @@
       <!-- Upper arm - yaw (world Z) then pitch (Y), same pivot, 5 mm below mount.
            518 mm, 9 kg (freeze budget), 1x1 in tube. Zero pose = hanging straight down. -->
           <body name="upper_arm" pos="0 0 -0.005">
-            <joint name="upper_arm_yaw_joint" type="hinge" axis="0 0 1" pos="0 0 0" limited="true" range="-${swivel} ${swivel}" damping="15" armature="0.2"/>
+            <joint name="upper_arm_yaw_joint" type="hinge" axis="0 0 1" pos="0 0 0" limited="true" range="-${swivel} ${swivel}" damping=".1" armature="0.001"/>
             <joint name="upper_arm_pitch_joint" type="hinge" axis="0 1 0" pos="0 0 0" limited="true" range="-${pitch} ${pitch}" damping="80" armature="0.1"/>
             <geom type="box" size="${ua_w} ${ua_w} ${ua_half}" pos="0 0 -${ua_half}" mass="${ua_mass}"/>
             <!-- Lower arm joint - L1 = 518 mm below swivel -->
@@ -93,11 +93,56 @@
     Position-controlled actuators.
   -->
   <actuator>
-    <motor name="upper_arm_yaw_motor" joint="upper_arm_yaw_joint" gear="40" ctrlrange="-1 1" forcerange="-40 40"/>
-    <motor name="upper_arm_pitch_motor" joint="upper_arm_pitch_joint" gear="110" ctrlrange="-1 1" forcerange="-110 110"/>
-    <motor name="lower_arm_motor" joint="lower_arm_joint" gear="18.32" ctrlrange="-1 1" forcerange="-18.32 18.32"/>
-    <position name="tilt_actuator"         joint="tilt_joint"         kp="200" ctrlrange="-${tilt} ${tilt}"/>
-    <position name="nod_actuator"          joint="nod_joint"          kp="200" ctrlrange="-${nod} ${nod}"/>
+    <dcmotor 
+      name="upper_arm_yaw_motor" 
+      joint="upper_arm_yaw_joint" 
+      nominal="12 2.6 594.39" 
+      saturation="0 40 0"
+      armature = "0.00012"
+      input = "pos vel"
+      controller = "500 0 25 0 0 12"
+      gear = "1"
+    />
+    <dcmotor 
+      name="upper_arm_pitch_motor" 
+      joint="upper_arm_pitch_joint" 
+      nominal="12 2.6 594.39" 
+      saturation="0 40 0"
+      armature = "0.00012"
+      input = "pos vel"
+      controller = "1 1 1 0 0 12"
+      gear = "1"
+    />
+    <dcmotor 
+      name="lower_arm_motor" 
+      joint="lower_arm_joint" 
+      nominal="12 2.6 594.39" 
+      saturation="0 40 0"
+      armature = "0.00012"
+      input = "pos vel"
+      controller = "1 1 1 0 0 12"
+      gear = "1"
+    />
+    <dcmotor 
+      name="tilt_actuator" 
+      joint="tilt_joint" 
+      nominal="12 2.6 594.39" 
+      saturation="0 40 0"
+      armature = "0.00012"
+      input = "pos vel"
+      controller = "1 1 1 0 0 12"
+      gear = "1"
+    />
+    <dcmotor 
+      name="nod_actuator" 
+      joint="nod_joint" 
+      nominal="12 2.6 594.39" 
+      saturation="0 40 0"
+      armature = "0.00012"
+      input = "pos vel"
+      controller = "1 1 1 0 0 12"
+      gear = "1"
+    />
     <position name="eye_actuator"         joint="eye_joint"          kp="200" ctrlrange="-0.002 0.002"/>
   </actuator>
 
