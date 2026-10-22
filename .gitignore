@@ -110,3 +110,7 @@ test*.wav
 
 #sim
 videos/
+
+#algorithmic voice - c/c++ shenanigans
+*.exe
+*.gitignore

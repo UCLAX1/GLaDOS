@@ -18,8 +18,52 @@ extern "C"{
 #include <string.h>
 #include <stdint.h>
 #include <math.h>
+#include <map>
 
 using namespace std;
+
+double overtone[20];//stores frequencies of each overtone
+double overtoneAmp[20]//stores amplitudes of each overtone
+={
+    1,1,1,1,1,
+    1,1,1,1,1,
+    1,1,1,1,1,
+    1,1,1,1,1,
+};
+
+//first formant dictionary
+map <string, int> formant1;
+map <string, int> formant2;
+string currentFormant = "ɑ";
+
+void setUpFormants(){
+    formant1["i"] = 310;
+    formant2["i"] = 2790;
+    formant1["a"] = 850;
+    formant2["a"] = 1220;
+}
+
+static const double PI = 3.14159265358979323846264338328;
+static const double TAU = PI*2.0;
+double fundementalFreq = 240;
+double generateVoice(double time){
+    double sample = 0;
+    overtone[0] = fundementalFreq;
+    for(int i = 1; i < 20; i++){
+        overtone[i] = overtone[i-1]+fundementalFreq;
+    }
+    for(int i = 0; i < 20; i++){
+        double amplitude = overtoneAmp[i]/(i+1);
+
+        amplitude += (1-amplitude)/(max(abs(formant1[currentFormant]-overtone[i]),1.0)*.001);
+        amplitude += (1-amplitude)/(max(abs(formant2[currentFormant]-overtone[i]),1.0)*.001);
+
+        amplitude *= 0.01;
+
+        sample += sin(time * (overtone[i]*TAU))*amplitude;
+    }
+    return sample;
+}
 
 static int usage(char *exe) {
     fprintf(stderr, "Usage: %s [options]\n"
@@ -54,7 +98,6 @@ static void write_sample_float64ne(char *ptr, double sample) {
     *buf = sample;
 }
 static void (*write_sample)(char *ptr, double sample);
-static const double PI = 3.14159265358979323846264338328;
 static double seconds_offset = 0.0;
 static double uniframe = 0;//universal frame
 static volatile bool want_pause = false;
@@ -77,7 +120,9 @@ static void write_callback(struct SoundIoOutStream *outstream, int frame_count_m
         double radians_per_second = pitch * 2.0 * PI;
         for (int frame = 0; frame < frame_count; frame += 1) {
             double time = (seconds_offset + (frame+uniframe) * seconds_per_frame);
-            double sample = sin(time * (radians_per_second+time*100))*.01;
+
+            double sample = generateVoice(time);
+
             for (int channel = 0; channel < layout->channel_count; channel += 1) {
                 write_sample(areas[channel].ptr, sample);
                 areas[channel].ptr += areas[channel].step;
@@ -102,6 +147,9 @@ static void underflow_callback(struct SoundIoOutStream *outstream) {
     fprintf(stderr, "underflow %d\n", count++);
 }
 int main(int argc, char **argv) {
+    cin >> currentFormant;
+    setUpFormants();
+
     char *exe = argv[0];
     enum SoundIoBackend backend = SoundIoBackendNone;
     char *device_id = NULL;
