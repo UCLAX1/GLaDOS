@@ -101,13 +101,13 @@ double generateVoice(double time){
 
     double lastAmp = 0;
     for(int i = 0; i < 20; i++){
-        double amplitude = overtoneAmp[i]/(i+1);
+        double amplitude = overtoneAmp[i]/(i+1)*.1;
 
-        amplitude += (1-amplitude)/(max(abs(formant1[currentFormant]-overtone[i]),1.0)*.001);
-        amplitude += (1-amplitude)/(max(abs(formant2[currentFormant]-overtone[i]),1.0)*.001)*.75;
+        amplitude += (1-amplitude)/(max(abs(formant1[currentFormant]-overtone[i]),1.0)*.001)*.75;
+        amplitude += (1-amplitude)/(max(abs(formant2[currentFormant]-overtone[i]),1.0)*.001)*.5;
         amplitude += (1-amplitude)/(max(abs(formant3[currentFormant]-overtone[i]),1.0)*.001)*.25;
 
-        amplitude *= 0.01;
+        amplitude *= 0.0025;
 
         //dampening?
         //amplitude += (lastAmp-amplitude);
