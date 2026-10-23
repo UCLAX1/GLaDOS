@@ -34,31 +34,84 @@ double overtoneAmp[20]//stores amplitudes of each overtone
 //first formant dictionary
 map <string, int> formant1;
 map <string, int> formant2;
-string currentFormant = "ɑ";
+map <string, int> formant3;
+string currentFormant = "u";
 
 void setUpFormants(){
-    formant1["i"] = 310;
-    formant2["i"] = 2790;
-    formant1["a"] = 850;
-    formant2["a"] = 1220;
+    // /i/
+    formant1["ee"] = 310;
+    formant2["ee"] = 2790;
+    formant3["ee"] = 3310;
+
+    // /ɛ/
+    formant1["eh"] = 610;
+    formant2["eh"] = 2330;
+    formant3["eh"] = 2990;
+
+    // /æ/
+    formant1["ae"] = 860;
+    formant2["ae"] = 2050;
+    formant3["ae"] = 2850;
+
+    // /ɑ/
+    formant1["u"] = 850;
+    formant2["u"] = 1220;
+    formant3["u"] = 2810;
+
+    // /ɔ/
+    formant1["oh"] = 590;
+    formant2["oh"] = 920;
+    formant3["oh"] = 2710;
+
+    // /u/
+    formant1["oo"] = 370;
+    formant2["oo"] = 950;
+    formant3["oo"] = 2670;
+
+    // /ʌ/
+    formant1["uh"] = 760;
+    formant2["uh"] = 1400;
+    formant3["uh"] = 2780;
 }
+string text = "ueheeohoo";
+int textPoint = 0;
+double cycleTime = 0;
 
 static const double PI = 3.14159265358979323846264338328;
 static const double TAU = PI*2.0;
-double fundementalFreq = 240;
+double fundementalFreq = 300;
 double generateVoice(double time){
     double sample = 0;
     overtone[0] = fundementalFreq;
     for(int i = 1; i < 20; i++){
         overtone[i] = overtone[i-1]+fundementalFreq;
     }
+
+    if(time > cycleTime && textPoint < text.size()){
+        if(formant1.count(text.substr(textPoint,2)) > 0){
+            currentFormant = text.substr(textPoint,2);
+            textPoint++;
+        }else{
+            currentFormant = text.substr(textPoint,1);
+        }
+        cycleTime+=.5;
+        textPoint++;
+        cout << currentFormant << endl;
+    }
+
+    double lastAmp = 0;
     for(int i = 0; i < 20; i++){
         double amplitude = overtoneAmp[i]/(i+1);
 
         amplitude += (1-amplitude)/(max(abs(formant1[currentFormant]-overtone[i]),1.0)*.001);
-        amplitude += (1-amplitude)/(max(abs(formant2[currentFormant]-overtone[i]),1.0)*.001);
+        amplitude += (1-amplitude)/(max(abs(formant2[currentFormant]-overtone[i]),1.0)*.001)*.75;
+        amplitude += (1-amplitude)/(max(abs(formant3[currentFormant]-overtone[i]),1.0)*.001)*.25;
 
         amplitude *= 0.01;
+
+        //dampening?
+        //amplitude += (lastAmp-amplitude);
+        //lastAmp = amplitude;
 
         sample += sin(time * (overtone[i]*TAU))*amplitude;
     }
@@ -147,7 +200,7 @@ static void underflow_callback(struct SoundIoOutStream *outstream) {
     fprintf(stderr, "underflow %d\n", count++);
 }
 int main(int argc, char **argv) {
-    cin >> currentFormant;
+    //cin >> currentFormant;
     setUpFormants();
 
     char *exe = argv[0];
