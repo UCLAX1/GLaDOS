@@ -1,5 +1,8 @@
-opencv-python
+# Requires Python 3.9-3.12: mediapipe 0.10.21 is the last release with the
+# legacy mp.solutions API (used by gestures.py and expression.py) and has no
+# wheels for newer Python versions.
 mediapipe==0.10.21
 numpy<2
-insightface
+opencv-python
+insightface==2.1
 onnxruntime
