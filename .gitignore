@@ -110,3 +110,8 @@ test*.wav
 
 #sim
 videos/
+# vision — local outputs (snapshots, recordings, point clouds)
+vision/depth/out/
+*.svo
+*.svo2
+*.ply
