@@ -2,6 +2,16 @@
 
 Software related to visual input and human interaction
 
+## Setup
+
+Requires Python 3.12. MediaPipe 0.10.21, the last release with the `mp.solutions` API used here, has no wheels for newer Python versions.
+
+```bash
+python3.12 -m venv vision/.venv
+source vision/.venv/bin/activate
+pip install -r vision/requirements.txt
+```
+
 ## Gesture Detection
 
 `gestures.py` uses MediaPipe Pose with a webcam to detect body landmarks and recognize gestures.
@@ -15,7 +25,6 @@ Currently detects:
 Run:
 
 ```bash
-pip install -r vision/requirements.txt
 python vision/gestures.py
 ```
 
