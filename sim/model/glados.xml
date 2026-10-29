@@ -99,9 +99,9 @@
       nominal="12 2.6 594.39" 
       saturation="0 40 0"
       armature = "0.00012"
-      input = "pos vel"
+      input = "pos vel ff"
       controller = "500 0 25 0 0 12"
-      gear = "1"
+      gear = "25"
     />
     <dcmotor 
       name="upper_arm_pitch_motor" 
@@ -109,9 +109,9 @@
       nominal="12 2.6 594.39" 
       saturation="0 40 0"
       armature = "0.00012"
-      input = "pos vel"
+      input = "pos vel ff"
       controller = "1 1 1 0 0 12"
-      gear = "1"
+      gear = "80"
     />
     <dcmotor 
       name="lower_arm_motor" 
@@ -119,9 +119,9 @@
       nominal="12 2.6 594.39" 
       saturation="0 40 0"
       armature = "0.00012"
-      input = "pos vel"
+      input = "pos vel ff"
       controller = "1 1 1 0 0 12"
-      gear = "1"
+      gear = "25"
     />
     <dcmotor 
       name="tilt_actuator" 
@@ -129,7 +129,7 @@
       nominal="12 2.6 594.39" 
       saturation="0 40 0"
       armature = "0.00012"
-      input = "pos vel"
+      input = "pos vel ff"
       controller = "1 1 1 0 0 12"
       gear = "1"
     />
@@ -139,7 +139,7 @@
       nominal="12 2.6 594.39" 
       saturation="0 40 0"
       armature = "0.00012"
-      input = "pos vel"
+      input = "pos vel ff"
       controller = "1 1 1 0 0 12"
       gear = "1"
     />
