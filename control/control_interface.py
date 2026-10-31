@@ -11,6 +11,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).parents[1] / "sim"))
 sys.path.insert(0, str(pathlib.Path(__file__).parents[1] / "sim" / "F_I_K" / "arm"))
 import params
 from helper import solve
+import numpy as np
 
 
 def ik(x: float, y: float, z: float) -> tuple[float, float, float]:
@@ -71,43 +72,51 @@ class ControlInterface(ABC):
 
 
     def pose(self, 
-        *,
+        unit: str,
+        target_position: tuple[float, float, float],
         duration: float = 0.5,
         lerp: bool = True,
         timeout: float = 3.0,
-        **kwargs
     ):
-        print(**kwargs)
-        # joints = [
-        #     "main_swivel", 
-        #     "upper_arm", 
-        #     "lower_arm",
-        # ]
-        # starts  = {j: self._robot.get_position(j) for j in joints}
-        # t_start = time.time()
-        # while True:
-        #     if not self._running():
-        #         return self
-        #     elapsed = time.time() - t_start
-        #     t       = _smoothstep(elapsed / max(duration, 1e-6))
-        #     interp  = {
-        #         j: starts[j] + (targets[j] - starts[j]) * t
-        #         for j in targets
-        #     }
-        #     self._command(**interp)
-        #     self._tick()
-        #     if elapsed >= duration:
-        #         break
+        joints = [
+            "main_swivel", 
+            "upper_arm", 
+            "lower_arm",
+        ]
+        # all in degrees for some reason bruh
+        starting_joint_positions  = {j: self.get_position(j) for j in joints}
+
+        if unit == "cart_pos":
+            target_joint_positions = {j: np.rad2deg(t) for j, t in zip(joints, ik(*target_position))}
+            unit = "rad"
+        else:
+            target_joint_positions = {j: t for j, t in zip(joints, ik(*target_position))}
 
 
-        # current_joint_positions = (self.get_position(joint) for joint in joints)
+        t_start = time.time()
+        # print(target_joint_positions)
+        while True:
+            if not self._running():
+                return
+            elapsed = time.time() - t_start
+            t       = _smoothstep(elapsed / max(duration, 1e-6))
+            interp  = {
+                j: starting_joint_positions[j] + (target_joint_positions[j] - starting_joint_positions[j]) * t
+                for j in joints
+            }
+            # print(interp["main_swivel"])
+            # print(f"starting joint position: {starting_joint_positions["main_swivel"]:.2f}")
+            self._command(**interp, unit="deg")
 
-        # current_position = ik(*current_joint_positions)
+            # break if reached position
+            if all(abs(self.get_position(j) - v) < (self.ARRIVE_TOL_EYE if j == "eye" else self.ARRIVE_TOL)
+                   for j, v in target_joint_positions.items()):
+                break
+            # if elapsed >= duration:
+            #     print("took too long to reach target")
+            #     break
+            self._tick()
 
-        # # target_position = **kwargs
-        # print(**kwargs)
-
-        # print(f"current position: {current_position}")
 
 
     def _command(
