@@ -14,7 +14,9 @@ def run(robot, rounds=None):
     n = 0
     while robot._running() and (rounds is None or n < rounds):
         for point in POINTS:
-            robot.move(position=point, unit="cart_pos")
+            # robot.move(position=point, unit="cart_pos")
+            # robot.pose(position=point, unit="cart_pos", duration=5.0)
+            robot.pose(target_position=point, unit="cart_pos", duration=1.0)
             robot.run_action("nod")
         n += 1
 
