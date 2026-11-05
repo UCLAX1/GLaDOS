@@ -113,6 +113,7 @@ class Sequence:
             # ── lerp: interpolate smoothly to target ─────────────────────────
             if lerp:
                 starts  = {j: self._robot.get_position(j) for j in targets}
+                
                 t_start = time.time()
                 while True:
                     if not self._is_running():
