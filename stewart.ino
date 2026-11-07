@@ -23,8 +23,8 @@ float Offset = (2 * PI) / 3;
 
 void setup() {
   servo1.attach(SERVOPIN1);
-  servo1.attach(SERVOPIN2);
-  servo1.attach(SERVOPIN1);  // attaches the servo pins to the respective servo objects
+  servo2.attach(SERVOPIN2);
+  servo3.attach(SERVOPIN3);  // attaches the servo pins to the respective servo objects
   Serial.begin(9600);
 
   moveTo(90, 10);
