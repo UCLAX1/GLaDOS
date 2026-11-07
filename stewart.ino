@@ -27,10 +27,27 @@ void setup() {
   servo3.attach(SERVOPIN3);  // attaches the servo pins to the respective servo objects
   Serial.begin(9600);
 
+  Serial.setTimeout(-1);
+
   moveTo(90, 10);
 }
 
 void loop() {
+  
+  int theta = 0;
+
+  int phi = 0
+
+  if(Serial.available() > 0){
+    val = Serial.parseInt();
+    Serial.print("setting theta to ");
+    Serial.println(val);
+
+    theta = val;
+  }
+
+
+  moveTo(theta, phi);
  
 }
 
