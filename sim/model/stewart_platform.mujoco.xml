@@ -1,0 +1,32 @@
+<mujoco>
+  <!-- <option integrator="RK4"/> -->
+
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" width="512" height="512" rgb1=".1 .2 .3" rgb2=".2 .3 .4"/>
+    <material name="grid" texture="grid" texrepeat="2 2" texuniform="true" reflectance=".2"/>
+
+  </asset>
+  <worldbody>
+    <!-- <light pos=".3 -.3 .8" mode="trackcom" diffuse="1 1 1" specular=".3 .3 .3"/> -->
+    <light pos="0 0 1"/>
+    <geom name="floor" type="plane" size="3 3 .01" pos="-0.025 -0.295  0" material="grid"/>
+
+    
+
+    <body name="platform_wrapper" pos="0 0 0.2">
+      <geom name="platform" type="cylinder" pos="0 0 0.37" size="0.20 0.01"/>
+      <geom name="rod_0" type="cylinder" pos="0.1 0.1 0.2" size="0.005 0.2" euler="30 -30 0"/>
+
+      <body name="base" pos="0 0 0.01">
+        <geom type="cylinder" pos="0 0 0.0" size="0.3 0.01" rgba="1 1 1 0.5"/>
+        <body name="rod_and_ball" pos="0 0 0.01">
+          <geom name="middle_rod" type="cylinder" pos="0 0 0.15" size="0.01 0.15"/>
+          <geom name="ball" type="sphere" pos="0 0 0.3" size="0.04"/>
+        </body>
+
+      </body>
+
+    </body>
+
+  </worldbody>
+</mujoco>
