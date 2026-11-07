@@ -27,24 +27,30 @@ void setup() {
   servo3.attach(SERVOPIN3);  // attaches the servo pins to the respective servo objects
   Serial.begin(9600);
 
-  Serial.setTimeout(-1);
+  // Serial.setTimeout(-1);
 
   moveTo(90, 10);
 }
 
 void loop() {
+
+
+  float t = (float)millis() / 1000;
+
+
   
-  int theta = 0;
+  // int theta = 0;
+  int theta = 10 * cos(t / PI);
 
-  int phi = 0
+  int phi = 10 * sin(t / PI);
 
-  if(Serial.available() > 0){
-    val = Serial.parseInt();
-    Serial.print("setting theta to ");
-    Serial.println(val);
+  // if(Serial.available() > 0){
+  //   val = Serial.parseInt();
+  //   Serial.print("setting theta to ");
+  //   Serial.println(val);
 
-    theta = val;
-  }
+  //   theta = val;
+  // }
 
 
   moveTo(theta, phi);
@@ -52,7 +58,7 @@ void loop() {
 }
 
 // Function to move the platform to a specific theta and phi angle
-void moveTo(int theta, int phi){
+void moveTo(int theta, int phi) {
   Amplitude = sin((PI/180) * phi) * BASE/ ARMLENGTH;
   val1 = asin(Amplitude * sin((PI/180) * theta) + ((float)INTIAL/ARMLENGTH))* (180/PI);
   val1 = constrain(val1 + SERVOOFFSET, 120, 180);  // constain it to use it with the servo (value between 120 and 180)
