@@ -13,7 +13,7 @@ app = FaceAnalysis(
     name="buffalo_l",
     providers=["CPUExecutionProvider"]
 )
-app.prepare(ctx_id=-1, det_size=(640, 640))
+app.prepare(ctx_id=-1, det_size=(320, 320))
 
 THRESHOLD = 0.5
 NUM_SAMPLES = 15

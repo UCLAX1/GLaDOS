@@ -629,15 +629,15 @@ while True:
         2
     )
     #more text
-    cv2.putText(
-        frame,
-        f"cAKE: piyhgf",
-        (60, 90),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        1,
-        (0, 255, 0),
-        2
-    )
+    # cv2.putText(
+    #     frame,
+    #     f"cAKE: piyhgf",
+    #     (60, 90),
+    #     cv2.FONT_HERSHEY_SIMPLEX,
+    #     1,
+    #     (0, 255, 0),
+    #     2
+    # )
 
     cv2.imshow("Glados Gesture Test", frame)
 
