@@ -36,8 +36,6 @@ void loop() {
 
 
   float t = (float)millis() / 1000;
-
-
   
   // int theta = 0;
   int theta = 10 * cos(t / PI);

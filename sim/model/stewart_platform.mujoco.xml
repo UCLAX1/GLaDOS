@@ -1,5 +1,7 @@
 <mujoco>
   <!-- <option integrator="RK4"/> -->
+  <option timestep="0.002" gravity="0 0 -9.81" integrator="RK4"/>
+
 
   <asset>
     <texture name="grid" type="2d" builtin="checker" width="512" height="512" rgb1=".1 .2 .3" rgb2=".2 .3 .4"/>
@@ -13,20 +15,43 @@
 
     
 
-    <body name="platform_wrapper" pos="0 0 0.2">
-      <geom name="platform" type="cylinder" pos="0 0 0.37" size="0.20 0.01"/>
-      <geom name="rod_0" type="cylinder" pos="0.1 0.1 0.2" size="0.005 0.2" euler="30 -30 0"/>
+    <body name="base" pos="0 0 0.5">
+        <geom name="base_plate" type="cylinder" pos="0 0 0.0" size="0.1 0.01" rgba="1 1 1 0.5"/>
 
-      <body name="base" pos="0 0 0.01">
-        <geom type="cylinder" pos="0 0 0.0" size="0.3 0.01" rgba="1 1 1 0.5"/>
-        <body name="rod_and_ball" pos="0 0 0.01">
-          <geom name="middle_rod" type="cylinder" pos="0 0 0.15" size="0.01 0.15"/>
-          <geom name="ball" type="sphere" pos="0 0 0.3" size="0.04"/>
+        <body name="group_a" euler="0 0 30">
+
+          <body name="servo_group_a" pos="0 0.1 0">
+            <!-- <inertial pos="0.0 0.06 0" mass="0.02" diaginertia="1e-4 1e-4 1e-4"/> -->
+            <joint name="servo_group_hinge_a" type="hinge" axis="1 0 0" damping="0.001" frictionloss="0.00025"/>
+            <geom name="servo_geom_a" type="cylinder" euler="0 90 0" pos="0 0 0" size="0.02 0.02" contype="0" conaffinity="0"/>
+
+            <body name="servo_arm_and_rod_a" pos="0 0.01 0">
+              <geom name="servo_arm_a" type="capsule" fromto="0 0 0 0 0.06 0" size="0.01" contype="0" conaffinity="0"/>
+
+              <body name="rod_a" pos="0 0.07 0">
+                <joint name="rod_hinge_a" type="hinge" axis="1 0 0" damping="0.001" frictionloss="0.00025"/>
+                <geom name="rod_geom_a" type="capsule" fromto="0 0 0 0 0.16 0" size="0.005"/>
+
+              </body>
+            </body>
+          </body>
         </body>
 
-      </body>
+        <!-- <body link_pair_a pos= -->
+
+        <body name="rod_and_ball" pos="0 0 0.01">
+          <geom name="middle_rod" type="cylinder" fromto="0 0 0 0 0 0.12" size="0.007"/>
+          <geom name="ball" type="sphere" pos="0 0 0.13" size="0.02"/>
+        </body>
+
 
     </body>
+
+    <body name="platform" pos="0 0 0.23">
+      <geom name="platform" type="cylinder" pos="0 0 0.45" size="0.12 0.004"/>
+    </body>
+
+    <!-- <geom name="rod_0" type="cylinder" pos="0.1 0.1 0.2" size="0.005 0.2" euler="30 -30 0"/> -->
 
   </worldbody>
 </mujoco>

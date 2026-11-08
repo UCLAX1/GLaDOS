@@ -1,0 +1,290 @@
+<mujoco model="stewart_platform">
+  <compiler angle="radian" autolimits="true"/>
+  <option timestep="0.002" gravity="0 0 -9.81" integrator="RK4"/>
+
+  <visual>
+    <headlight diffuse="0.7 0.7 0.7" ambient="0.18 0.18 0.2" specular="0.35 0.35 0.35"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="145" elevation="-18"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.62 0.73 0.82" rgb2="0.08 0.1 0.14" width="512" height="512"/>
+    <texture name="ground_tex" type="2d" builtin="checker" rgb1="0.16 0.19 0.23" rgb2="0.08 0.09 0.11" width="512" height="512" mark="edge" markrgb="0.24 0.27 0.31"/>
+    <material name="ground_mat" texture="ground_tex" texrepeat="6 6" texuniform="true" rgba="1 1 1 1" reflectance="0.35" shininess="0.85" specular="0.45"/>
+    <material name="base_mat" rgba="0.82 0.33 0.24 1" reflectance="0.18" shininess="0.75" specular="0.6"/>
+    <material name="post_a_mat" rgba="0.18 0.64 0.72 1" reflectance="0.18" shininess="0.7" specular="0.45"/>
+    <material name="post_b_mat" rgba="0.18 0.48 0.88 1" reflectance="0.18" shininess="0.7" specular="0.45"/>
+    <material name="post_c_mat" rgba="0.92 0.88 0.78 1" reflectance="0.14" shininess="0.55" specular="0.35"/>
+    <material name="post_d_mat" rgba="0.78 0.68 0.52 1" reflectance="0.14" shininess="0.55" specular="0.35"/>
+    <material name="stick_mat" rgba="0.92 0.92 0.96 1" reflectance="0.12" shininess="0.45" specular="0.3"/>
+    <material name="post_e_mat" rgba="0.85 0.0 0.0 1" reflectance="0.14" shininess="0.55" specular="0.35"/>
+    <material name="post_f_mat" rgba="0.98 0.42 0.12 1" reflectance="0.14" shininess="0.55" specular="0.35"/>
+    <material name="ball_mat" rgba="0.96 0.94 0.22 1" reflectance="0.2" shininess="0.5" specular="0.35"/>
+  </asset>
+
+  <worldbody>
+    <light pos="2.5 -2.5 4.2" dir="-0.4 0.35 -1" diffuse="0.95 0.9 0.85" specular="0.35 0.35 0.35" directional="true" castshadow="true"/>
+    <light pos="-3 2 2.5" dir="0.45 -0.2 -1" diffuse="0.3 0.36 0.45"/>
+    <geom type="plane" size="8 8 0.1" material="ground_mat" contype="1" conaffinity="2"/>
+    <camera name="hero" pos="2.2 -2.2 2.0" xyaxes="0.72 0.69 0 -0.18 0.19 0.96"/>
+
+    <body name="base" pos="0 0 0.2">
+      <geom name="base_plate" type="cylinder" size="0.30 0.03" material="base_mat" contype="0" conaffinity="0"/>
+
+      <body name="link_a" pos="0.31 0.03 0.06">
+        <geom
+          name="post_a"
+          type="cylinder"
+          quat="0.70710678 0 0.70710678 0"
+          size="0.022 0.02"
+          material="post_a_mat" contype="0" conaffinity="0"/>
+
+        <body name="stick_a" pos="0.02 0 0">
+          <inertial pos="0.0 0.06 0" mass="0.02" diaginertia="1e-4 1e-4 1e-4"/>
+          <joint name="stick_a_hinge" type="hinge" axis="1 0 0" range="-3.14 3.14" damping="0.05"/>
+          <geom
+            name="stick_a_geom"
+            type="capsule"
+            fromto="0 0 0 0 0.12 0"
+            size="0.01"
+            material="stick_mat" contype="0" conaffinity="0"/>
+          <body name="stick2_a" pos="0 0.12 0">
+            <inertial pos="0.0 0.04 0" mass="0.015" diaginertia="8e-5 8e-5 8e-5"/>
+            <joint name="stick2_a_ball" type="ball" damping="0.05"/>
+              <geom
+                name="stick2_a_geom"
+                type="capsule"
+                fromto="0 0 0 0 0.36 0"
+                size="0.009"
+                material="stick_mat" contype="0" conaffinity="0"/>
+            <site name="tip_a" pos="0 0.36 0" size="0.008" rgba="0.2 0.8 0.2 1"/>
+          </body>
+        </body>
+      </body>
+
+      <body name="link_b" pos="0.31 -0.03 0.06">
+        <geom
+          name="post_b"
+          type="cylinder"
+          quat="0.70710678 0 0.70710678 0"
+          size="0.022 0.02"
+          material="post_b_mat" contype="0" conaffinity="0"/>
+
+          <body name="stick_b" pos="0.02 0 0">
+          <inertial pos="0.0 -0.06 0" mass="0.02" diaginertia="1e-4 1e-4 1e-4"/>
+          <joint name="stick_b_hinge" type="hinge" axis="1 0 0" range="-3.14 3.14" damping="0.05"/>
+          <geom
+            name="stick_b_geom"
+            type="capsule"
+            fromto="0 0 0 0 -0.12 0"
+            size="0.01"
+            material="stick_mat" contype="0" conaffinity="0"/>
+          <body name="stick2_b" pos="0 -0.12 0">
+            <inertial pos="0.0 -0.04 0" mass="0.015" diaginertia="8e-5 8e-5 8e-5"/>
+            <joint name="stick2_b_ball" type="ball" damping="0.05"/>
+              <geom
+                name="stick2_b_geom"
+                type="capsule"
+                fromto="0 0 0 0 -0.36 0"
+                size="0.009"
+                material="stick_mat" contype="0" conaffinity="0"/>
+            <site name="tip_b" pos="0 -0.36 0" size="0.008" rgba="0.95 0.95 0.95 1"/>
+          </body>
+        </body>
+      </body>
+
+      <body name="pair_c" quat="0.5 0 0 -0.8660254">
+        <body name="link_c" pos="0.31 0.03 0.06">
+          <geom
+            name="post_c"
+            type="cylinder"
+            quat="0.70710678 0 0.70710678 0"
+            size="0.022 0.02"
+            material="post_c_mat" contype="0" conaffinity="0"/>
+
+          <body name="stick_c" pos="0.02 0 0">
+            <inertial pos="0.0 0.06 0" mass="0.02" diaginertia="1e-4 1e-4 1e-4"/>
+            <joint name="stick_c_hinge" type="hinge" axis="1 0 0" range="-3.14 3.14" damping="0.05"/>
+            <geom
+              name="stick_c_geom"
+              type="capsule"
+              fromto="0 0 0 0 0.12 0"
+              size="0.01"
+              material="stick_mat" contype="0" conaffinity="0"/>
+            <body name="stick2_c" pos="0 0.12 0">
+              <inertial pos="0.0 0.04 0" mass="0.015" diaginertia="8e-5 8e-5 8e-5"/>
+              <joint name="stick2_c_ball" type="ball" damping="0.05"/>
+              <geom
+                name="stick2_c_geom"
+                type="capsule"
+                fromto="0 0 0 0 0.36 0"
+                size="0.009"
+                material="stick_mat" contype="0" conaffinity="0"/>
+              <site name="tip_c" pos="0 0.36 0" size="0.008" rgba="0.12 0.32 0.88 1"/>
+            </body>
+          </body>
+        </body>
+
+        <body name="link_d" pos="0.31 -0.03 0.06">
+          <geom
+            name="post_d"
+            type="cylinder"
+            quat="0.70710678 0 0.70710678 0"
+            size="0.022 0.02"
+            material="post_d_mat" contype="0" conaffinity="0"/>
+
+          <body name="stick_d" pos="0.02 0 0">
+            <inertial pos="0.0 -0.06 0" mass="0.02" diaginertia="1e-4 1e-4 1e-4"/>
+            <joint name="stick_d_hinge" type="hinge" axis="1 0 0" range="-3.14 3.14" damping="0.05"/>
+            <geom
+              name="stick_d_geom"
+              type="capsule"
+              fromto="0 0 0 0 -0.12 0"
+              size="0.01"
+              material="stick_mat" contype="0" conaffinity="0"/>
+            <body name="stick2_d" pos="0 -0.12 0">
+              <inertial pos="0.0 -0.04 0" mass="0.015" diaginertia="8e-5 8e-5 8e-5"/>
+              <joint name="stick2_d_ball" type="ball" damping="0.05"/>
+              <geom
+                name="stick2_d_geom"
+                type="capsule"
+                fromto="0 0 0 0 -0.36 0"
+                size="0.009"
+                material="stick_mat" contype="0" conaffinity="0"/>
+              <site name="tip_d" pos="0 -0.36 0" size="0.008" rgba="0.78 0.68 0.52 1"/>
+            </body>
+          </body>
+        </body>
+      </body>
+
+      <body name="pair_e" quat="0.5 0 0 0.8660254">
+        <body name="link_e" pos="0.31 0.03 0.06">
+          <geom
+            name="post_e"
+            type="cylinder"
+            quat="0.70710678 0 0.70710678 0"
+            size="0.022 0.02"
+            material="post_e_mat" contype="0" conaffinity="0"/>
+
+          <body name="stick_e" pos="0.02 0 0">
+            <inertial pos="0.0 0.06 0" mass="0.02" diaginertia="1e-4 1e-4 1e-4"/>
+            <joint name="stick_e_hinge" type="hinge" axis="1 0 0" range="-3.14 3.14" damping="0.05"/>
+            <geom
+              name="stick_e_geom"
+              type="capsule"
+              fromto="0 0 0 0 0.12 0"
+              size="0.01"
+              material="stick_mat" contype="0" conaffinity="0"/>
+            <body name="stick2_e" pos="0 0.12 0">
+              <inertial pos="0.0 0.04 0" mass="0.015" diaginertia="8e-5 8e-5 8e-5"/>
+              <joint name="stick2_e_ball" type="ball" damping="0.05"/>
+              <geom
+                name="stick2_e_geom"
+                type="capsule"
+                fromto="0 0 0 0 0.36 0"
+                size="0.009"
+                material="stick_mat" contype="0" conaffinity="0"/>
+              <site name="tip_e" pos="0 0.36 0" size="0.008" rgba="0.85 0.0 0.0 1"/>
+            </body>
+          </body>
+        </body>
+
+        <body name="link_f" pos="0.31 -0.03 0.06">
+          <geom
+            name="post_f"
+            type="cylinder"
+            quat="0.70710678 0 0.70710678 0"
+            size="0.022 0.02"
+            material="post_f_mat" contype="0" conaffinity="0"/>
+
+          <body name="stick_f" pos="0.02 0 0">
+            <inertial pos="0.0 -0.06 0" mass="0.02" diaginertia="1e-4 1e-4 1e-4"/>
+            <joint name="stick_f_hinge" type="hinge" axis="1 0 0" range="-3.14 3.14" damping="0.05"/>
+            <geom
+              name="stick_f_geom"
+              type="capsule"
+              fromto="0 0 0 0 -0.12 0"
+              size="0.01"
+              material="stick_mat" contype="0" conaffinity="0"/>
+            <body name="stick2_f" pos="0 -0.12 0">
+              <inertial pos="0.0 -0.04 0" mass="0.015" diaginertia="8e-5 8e-5 8e-5"/>
+              <joint name="stick2_f_ball" type="ball" damping="0.05"/>
+              <geom
+                name="stick2_f_geom"
+                type="capsule"
+                fromto="0 0 0 0 -0.36 0"
+                size="0.009"
+                material="stick_mat" contype="0" conaffinity="0"/>
+            <site name="tip_f" pos="0 -0.36 0" size="0.008" rgba="0.9 0.5 0.1 1"/>
+          </body>
+        </body>
+      </body>
+      </body>
+    </body>
+
+    <body name="platform" pos="0.0 0.0 0.0">
+      <freejoint/>
+      <inertial pos="0 0 0" mass="0.2" diaginertia="0.002 0.002 0.002"/>
+      <geom name="top_plate" type="cylinder" size="0.132 0.015" material="base_mat" contype="1" conaffinity="2"/>
+      <site name="plat_a" pos="-0.09 0.1162 -0.015" size="0.008" rgba="0.2 0.8 0.2 1"/>
+      <site name="plat_b" pos="0.09 0.1162 -0.015" size="0.008" rgba="0.18 0.48 0.88 1"/>
+      <site name="plat_c" pos="0.1456 0.0199 -0.015" size="0.008" rgba="0.92 0.88 0.78 1"/>
+      <site name="plat_d" pos="0.0556 -0.1361 -0.015" size="0.008" rgba="0.78 0.68 0.52 1"/>
+      <site name="plat_e" pos="-0.0556 -0.1361 -0.015" size="0.008" rgba="0.85 0.0 0.0 1"/>
+      <site name="plat_f" pos="-0.1456 0.0199 -0.015" size="0.008" rgba="0.98 0.42 0.12 1"/>
+    </body>
+
+    <body name="ball" pos="0 0 0.66">
+      <freejoint/>
+      <geom name="ball_geom" type="sphere" size="0.025" mass="0.03" material="ball_mat" contype="2" conaffinity="1"/>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <position name="stick_a_motor" joint="stick_a_hinge" kp="80" dampratio="1" ctrlrange="-1.57 1.57"/>
+    <position name="stick_b_motor" joint="stick_b_hinge" kp="80" dampratio="1" ctrlrange="-1.57 1.57"/>
+    <position name="stick_c_motor" joint="stick_c_hinge" kp="80" dampratio="1" ctrlrange="-1.57 1.57"/>
+    <position name="stick_d_motor" joint="stick_d_hinge" kp="80" dampratio="1" ctrlrange="-1.57 1.57"/>
+    <position name="stick_e_motor" joint="stick_e_hinge" kp="80" dampratio="1" ctrlrange="-1.57 1.57"/>
+    <position name="stick_f_motor" joint="stick_f_hinge" kp="80" dampratio="1" ctrlrange="-1.57 1.57"/>
+  </actuator>
+
+  <keyframe>
+    <key
+      name="home"
+      qpos="-0.2889472 0.4975479 0.7961035 -0.3403828 0.05296137 0.2889472 0.6024027 -0.6079476 0.02292052 -0.5167063 -0.2889494 0.4979035 0.7960810 -0.3397905 0.05375494 0.2889473 0.6025272 -0.6084130 0.02257726 -0.5160281 -0.2889473 0.4980155 0.7959846 -0.3398960 0.05347760 0.2889494 0.6023516 -0.6078118 0.02319470 -0.5169132 -0.00006431 0 0.5409246 0.7071068 -0.00011937 0.00011937 -0.7071068 0.1 0.05 1.0 1 0 0 0"/>
+  </keyframe>
+
+  <contact>
+    <exclude body1="link_a" body2="stick_a"/>
+    <exclude body1="link_b" body2="stick_b"/>
+    <exclude body1="link_c" body2="stick_c"/>
+    <exclude body1="link_d" body2="stick_d"/>
+    <exclude body1="link_e" body2="stick_e"/>
+    <exclude body1="link_f" body2="stick_f"/>
+    <exclude body1="stick_a" body2="stick2_a"/>
+    <exclude body1="stick_b" body2="stick2_b"/>
+    <exclude body1="stick_c" body2="stick2_c"/>
+    <exclude body1="stick_d" body2="stick2_d"/>
+    <exclude body1="stick_e" body2="stick2_e"/>
+    <exclude body1="stick_f" body2="stick2_f"/>
+    <exclude body1="platform" body2="stick2_a"/>
+    <exclude body1="platform" body2="stick2_b"/>
+    <exclude body1="platform" body2="stick2_c"/>
+    <exclude body1="platform" body2="stick2_d"/>
+    <exclude body1="platform" body2="stick2_e"/>
+    <exclude body1="platform" body2="stick2_f"/>
+    <!-- <exclude body1="base" body2="pendulum_link_2"/>
+    <exclude body1="pendulum_link" body2="pendulum_link_2"/> -->
+  </contact>
+
+  <equality>
+    <connect site1="tip_a" site2="plat_a"/>
+    <connect site1="tip_b" site2="plat_b"/>
+    <connect site1="tip_c" site2="plat_c"/>
+    <connect site1="tip_d" site2="plat_d"/>
+    <connect site1="tip_e" site2="plat_e"/>
+    <connect site1="tip_f" site2="plat_f"/>
+  </equality>
+</mujoco>
