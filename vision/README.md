@@ -84,3 +84,23 @@ Camera
 → Compare with saved embeddings
 → Person identity
 ```
+
+## Person Tracking
+
+`object_tracker.py` uses Ultralytics YOLO with a webcam to put a box around every person. With tracking on, ByteTrack gives each person an ID that stays the same across frames, including after they're briefly hidden.
+
+It defaults to `yolo26n.pt` with YOLO26's NMS-free head, which doesn't drop one of two people standing close together the way NMS can. Pass another model name to compare:
+
+```bash
+python vision/object_tracker.py
+python vision/object_tracker.py yolo26n-pose.pt
+python vision/object_tracker.py yolo11n.pt
+```
+
+Weights download to the current directory on first run (`*.pt` is gitignored).
+
+Controls:
+- `T`: toggle tracking
+- `N`: toggle the NMS-free head (YOLO26 only)
+- `[` / `]`: lower / raise the NMS overlap threshold
+- `Q`: quit
