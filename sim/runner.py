@@ -7,7 +7,7 @@ Usage:
     from sim.runner import GladosSim
 
     sim = GladosSim()
-    with sim.launch():
+    with sim.launch():·
         sim.robot.move(nod=20)
         sim.robot.run_action("nod", loop=True)
 """
