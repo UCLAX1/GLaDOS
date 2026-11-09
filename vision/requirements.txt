@@ -6,3 +6,8 @@ numpy<2
 opencv-python
 insightface==2.1
 onnxruntime
+# object_tracker.py relies on this version's nms= argument to pick YOLO26's
+# NMS-free head, so this is pinned
+ultralytics==8.4.196
+# ByteTrack's matching solver; ultralytics installs it on first use otherwise
+lap
