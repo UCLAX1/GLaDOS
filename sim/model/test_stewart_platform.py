@@ -7,7 +7,7 @@ import mujoco.viewer
 m = mujoco.MjModel.from_xml_path('./stewart_platform.mujoco.xml')
 d = mujoco.MjData(m)
 
-# theta and phi of the normal angle
+# theta and phi of the normal angle (radians)
 theta = 0.0
 phi = 0.0
 
@@ -26,6 +26,7 @@ def update_angles():
   phi = phi_amplitude * np.cos(2 * np.pi * time.time() / phi_period)
   # phi = 0 
 
+# all values in meters and radians
 ROD_LENGTH = 0.08
 SERVO_ARM_LENGTH = 0.03
 # LEVEL_PLATFORM_SERVO_ANGLE = np.deg2rad(150)
@@ -37,6 +38,8 @@ MIN_SERVO_ANGLE = np.deg2rad(-45)
 MAX_SERVO_ANGLE = np.deg2rad(45)
 
 
+# theta, phi in radians
+# this code is a little broken and needs fixing
 def get_servo_vals_from_angles(theta, phi):
   amplitude = np.sin(phi) * ROD_LENGTH / SERVO_ARM_LENGTH
   offset = 2 * np.pi / 3
@@ -53,6 +56,8 @@ def get_servo_vals_from_angles(theta, phi):
 
   return val1, val2, val3
 
+# servo vals in radians
+# this function shouldn't be modified
 def move_servos(model, data, servo_a_val, servo_b_val, servo_c_val):
   servo_a_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "servo_a") # 30 degrees
   servo_b_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "servo_b") # 150 degrees
@@ -79,8 +84,8 @@ with mujoco.viewer.launch_passive(m, d) as viewer:
 
     # move_servos(m, d, *servo_vals)
 
+    # placeholder test code because get_servo_vals_from_angles() is broken
     t = 0.005 * np.sin(2 * np.pi * time.time() / 2)
-
     move_servos(m, d, t, -t, 0)
 
     # mj_step can be replaced with code that also evaluates
