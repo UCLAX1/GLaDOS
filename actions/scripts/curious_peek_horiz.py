@@ -1,4 +1,5 @@
 def curious_peek_horiz(seq):
     return (seq
-        .pose(main_swivel=30, eye=2, duration=1) # Depends where target is, 30 deg is arbitrary for now
+        .pose(main_swivel=30, eye=1, duration=1.0, additive=True)
+        .pose(main_swivel=-30, eye=-1, duration=1.0, additive=True)
         )

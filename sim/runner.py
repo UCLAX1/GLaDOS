@@ -1,53 +1,33 @@
 """
 runner.py
 
-Sim-specific setup. Loads the MuJoCo model and produces Sequences
-wired to the physics loop and viewer.
+Opens the sim. Everything you do to the robot afterwards lives in control/.
 
 Usage:
     from sim.runner import GladosSim
 
     sim = GladosSim()
-    with sim.launch() as viewer:
-        sim.sequence(viewer).pose(head=30, duration=0.3).play()
+    with sim.launch():
+        sim.robot.move(nod=20)
+        sim.robot.run_action("nod", loop=True)
 """
 
 import sys
-import time
 import pathlib
 
 import mujoco
-import mujoco.viewer
 
 sys.path.insert(0, str(pathlib.Path(__file__).parents[1]))
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from control.mujoco_control import MujocoControl
-from actions.sequence import Sequence, TICK_RATE
-
-_DEFAULT_XML = pathlib.Path(__file__).parent / "model" / "glados.xml"
 
 
 class GladosSim:
-    """Loads the MuJoCo model and produces Sequences wired to the sim loop."""
-
     def __init__(self, xml_path=None):
-        path = pathlib.Path(xml_path) if xml_path else _DEFAULT_XML
-        self.model = mujoco.MjModel.from_xml_path(str(path))
-        self.data  = mujoco.MjData(self.model)
-        self.robot = MujocoControl(self.model, self.data)
+        model = mujoco.MjModel.from_xml_path(str(xml_path)) if xml_path else None
+        self.robot = MujocoControl(model)
+        self.model, self.data = self.robot.model, self.robot.data
 
     def launch(self):
-        """Open the passive viewer. Use as: `with sim.launch() as viewer`."""
-        return mujoco.viewer.launch_passive(self.model, self.data)
-
-    def sequence(self, viewer) -> Sequence:
-        """Create a Sequence with sim-appropriate tick and running functions."""
-        def tick():
-            mujoco.mj_step(self.model, self.data)
-            viewer.sync()
-            time.sleep(TICK_RATE)
-
-        return Sequence(
-            robot      = self.robot,
-            tick_fn    = tick,
-            running_fn = viewer.is_running,
-        )
+        """Open the viewer. Use as: `with sim.launch() as viewer`."""
+        return self.robot.launch()

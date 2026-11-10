@@ -1,0 +1,3 @@
+[submodule "vision/zed-sdk"]
+	path = vision/zed-sdk
+	url = https://github.com/stereolabs/zed-sdk.git

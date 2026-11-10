@@ -144,14 +144,20 @@ class GladosTTS:
         with torch.no_grad():
             _ = self.speak("Initializing.", speed=1.0)
 
-    def speak(self, text: str, speed: float = 1.0) -> torch.Tensor:
+    def speak_stream(self, text: str, speed: float = 1.0):
+        """
+        Yield audio segments as Kokoro produces them, instead of waiting for the
+        whole utterance. KPipeline already segments internally — this just stops
+        throwing that away, so playback can start on the first segment.
+        """
         text = normalize_numbers(text)
-        chunks = [
-            audio
-            for _, _, audio in self.pipeline(text, voice=self.voice, speed=speed)
-        ]
-        audio = torch.cat(chunks, dim=0) if len(chunks) > 1 else chunks[0]
-        return audio.clamp(-1.0, 1.0)
+        for _, _, audio in self.pipeline(text, voice=self.voice, speed=speed):
+            yield audio.clamp(-1.0, 1.0)
+
+    def speak(self, text: str, speed: float = 1.0) -> torch.Tensor:
+        """Whole utterance as one tensor. Use speak_stream() for low latency."""
+        chunks = list(self.speak_stream(text, speed=speed))
+        return torch.cat(chunks, dim=0) if len(chunks) > 1 else chunks[0]
 
 
 # ── CLI ────────────────────────────────────────────────────────────────────
