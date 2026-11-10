@@ -115,3 +115,5 @@ vision/depth/out/
 *.svo
 *.svo2
 *.ply
+# vision — labelled gesture recordings (contain faces)
+vision/gesture_eval/recordings/
