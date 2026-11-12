@@ -20,17 +20,17 @@
     <body name="base" pos="0 0 0.5">
         <geom name="base_plate" type="cylinder" pos="0 0 0.0" size="0.1 0.01" rgba="1 1 1 0.5"/>
 
-        <body name="group_a" euler="0 0 30">
+        <body name="group_a" euler="0 0 270">
 
           <body name="servo_group_a" pos="0 0.1 0">
             <!-- <inertial pos="0.0 0.06 0" mass="0.02" diaginertia="1e-4 1e-4 1e-4"/> -->
             <joint name="servo_group_hinge_a" type="hinge" axis="1 0 0" damping="0.001" frictionloss="0.00025"/>
             <geom name="servo_geom_a" type="cylinder" euler="0 90 0" pos="0 0 0" size="0.02 0.02" contype="0" conaffinity="0"/>
 
-            <body name="servo_arm_and_rod_a" pos="0 0.01 0">
-              <geom name="servo_arm_a" type="capsule" fromto="0 0 0 0 0.06 0" size="0.01" contype="0" conaffinity="0"/>
+            <body name="servo_arm_and_rod_a" pos="0 0 0">
+              <geom name="servo_arm_a" type="capsule" fromto="0 0 0 0 0.08 0" size="0.01" contype="0" conaffinity="0"/>
 
-              <body name="rod_a" pos="0 0.07 0">
+              <body name="rod_a" pos="0 0.08 0">
                 <joint name="rod_hinge_a" type="hinge" axis="1 0 0" damping="0.001" frictionloss="0.00025"/>
                 <geom name="rod_geom_a" type="capsule" fromto="0 0 0 0 0.16 0" size="0.005"/>
                 <site name="rod_geom_tip_site_a" pos="0 0.16 0"/>
@@ -40,17 +40,17 @@
           </body>
         </body>
 
-        <body name="group_b" euler="0 0 150">
+        <body name="group_b" euler="0 0 30">
 
           <body name="servo_group_b" pos="0 0.1 0">
             <!-- <inertial pos="0.0 0.06 0" mass="0.02" diaginertia="1e-4 1e-4 1e-4"/> -->
             <joint name="servo_group_hinge_b" type="hinge" axis="1 0 0" damping="0.001" frictionloss="0.00025"/>
             <geom name="servo_geom_b" type="cylinder" euler="0 90 0" pos="0 0 0" size="0.02 0.02" contype="0" conaffinity="0"/>
 
-            <body name="servo_arm_and_rod_b" pos="0 0.01 0">
-              <geom name="servo_arm_b" type="capsule" fromto="0 0 0 0 0.06 0" size="0.01" contype="0" conaffinity="0"/>
+            <body name="servo_arm_and_rod_b" pos="0 0 0">
+              <geom name="servo_arm_b" type="capsule" fromto="0 0 0 0 0.08 0" size="0.01" contype="0" conaffinity="0"/>
 
-              <body name="rod_b" pos="0 0.07 0">
+              <body name="rod_b" pos="0 0.08 0">
                 <joint name="rod_hinge_b" type="hinge" axis="1 0 0" damping="0.001" frictionloss="0.00025"/>
                 <geom name="rod_geom_b" type="capsule" fromto="0 0 0 0 0.16 0" size="0.005"/>
                 <site name="rod_geom_tip_site_b" pos="0 0.16 0"/>
@@ -60,17 +60,17 @@
           </body>
         </body>
 
-        <body name="group_c" euler="0 0 270">
+        <body name="group_c" euler="0 0 150">
 
           <body name="servo_group_c" pos="0 0.1 0">
             <!-- <inertial pos="0.0 0.06 0" mass="0.02" diaginertia="1e-4 1e-4 1e-4"/> -->
             <joint name="servo_group_hinge_c" type="hinge" axis="1 0 0" damping="0.001" frictionloss="0.00025"/>
             <geom name="servo_geom_c" type="cylinder" euler="0 90 0" pos="0 0 0" size="0.02 0.02" contype="0" conaffinity="0"/>
 
-            <body name="servo_arm_and_rod_c" pos="0 0.01 0">
-              <geom name="servo_arm_c" type="capsule" fromto="0 0 0 0 0.06 0" size="0.01" contype="0" conaffinity="0"/>
+            <body name="servo_arm_and_rod_c" pos="0 0 0">
+              <geom name="servo_arm_c" type="capsule" fromto="0 0 0 0 0.08 0" size="0.01" contype="0" conaffinity="0"/>
 
-              <body name="rod_c" pos="0 0.07 0">
+              <body name="rod_c" pos="0 0.08 0">
                 <joint name="rod_hinge_c" type="hinge" axis="1 0 0" damping="0.001" frictionloss="0.00025"/>
                 <geom name="rod_geom_c" type="capsule" fromto="0 0 0 0 0.16 0" size="0.005"/>
                 <site name="rod_geom_tip_site_c" pos="0 0.16 0"/>
@@ -85,7 +85,7 @@
         <body name="rod_and_ball" pos="0 0 0.01">
           <geom name="middle_rod" type="cylinder" fromto="0 0 0 0 0 0.12" size="0.007"/>
 
-          <body name="ball_and_center_site" pos="0 0 0.13">
+          <body name="ball_and_center_site" pos="0 0 0.12">
             <geom name="ball" type="sphere" pos="0 0 0" size="0.02"/>
             <site name="ball_center_site" pos="0 0 0"/>
 
@@ -101,21 +101,23 @@
       <!-- <joint type="ball" pos="0 0 -0.025"/> -->
       <site name="platform_center_site" pos="0 0 -0.004"/>
 
-      <body name="platform_site_body_a" pos="0 0 0" euler="0 0 30">
+      <body name="platform_site_body_a" pos="0 0 0" euler="0 0 270">
         <site name="platform_site_a" pos="0 0.12 0"/>
 
       </body>
 
-      <body name="platform_site_body_b" pos="0 0 0" euler="0 0 150">
+      <body name="platform_site_body_b" pos="0 0 0" euler="0 0 30">
         <site name="platform_site_b" pos="0 0.12 0"/>
 
       </body>
 
-      <body name="platform_site_body_c" pos="0 0 0" euler="0 0 270">
+      <body name="platform_site_body_c" pos="0 0 0" euler="0 0 150">
         <site name="platform_site_c" pos="0 0.12 0"/>
 
       </body>
     </body>
+
+    <geom name="debug_rod" type="cylinder" pos="0 0 0" size="0.01 0.01" rgba="1 0 0 1"/>
 
     <!-- <geom name="rod_0" type="cylinder" pos="0.1 0.1 0.2" size="0.005 0.2" euler="30 -30 0"/> -->
 
@@ -134,10 +136,12 @@
     <position name="servo_b" joint="servo_group_hinge_b" kp="80" dampratio="1" ctrlrange="-1.57 1.57"/>
     <position name="servo_c" joint="servo_group_hinge_c" kp="80" dampratio="1" ctrlrange="-1.57 1.57"/>
 
+    <general name="theta_slider" joint="servo_group_hinge_a" gainprm="0" ctrllimited="true" ctrlrange="-180 180"/>
+    <general name="phi_slider" joint="servo_group_hinge_a" gainprm="0" ctrllimited="true" ctrlrange="0 30"/>
+
   </actuator>
 
   <contact>
-    <!-- <exclude body1="hello" body2="hi"/ -->
     <exclude body1="group_a" body2="platform_and_sites"/>
     <exclude body1="group_b" body2="platform_and_sites"/>
     <exclude body1="group_c" body2="platform_and_sites"/>
