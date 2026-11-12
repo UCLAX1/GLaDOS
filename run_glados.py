@@ -43,6 +43,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from central_ai.brain import GladosBrain
 from listening.listener import SpeechListener
 from speech.speech_queue import enqueue
+from vision.vision_client import VisionClient
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 # Gestures run in the simulator by default. Set GLADOS_HARDWARE=1 to drive the
@@ -65,6 +66,9 @@ brain      = GladosBrain()
 brain_lock = threading.Lock()   # one LLM request at a time
 listener   = None               # set in main(); read for per-utterance timings
 turns: list[dict] = []          # per-turn stage timings, summarised on exit
+
+# Vision client — connects to Jetson if JETSON_IP is set, otherwise no-ops
+vision = VisionClient()
 
 
 # ── Dispatch helpers ───────────────────────────────────────────────────────────
@@ -125,8 +129,12 @@ def on_transcription(text: str):
     dispatch  = 0.0
     sentences = 0
 
+    perception = vision.context_string()
+    if perception:
+        print(f"[vision]  {perception}")
+
     with brain_lock:
-        for sentence in brain.respond_stream(text):
+        for sentence in brain.respond_stream(text, perception=perception):
             t_disp = time.time()
             if llm_first is None:
                 llm_first = t_disp - t0
@@ -226,15 +234,19 @@ def print_summary():
 # ── Entry point ────────────────────────────────────────────────────────────────
 
 def main():
+    jetson_ip = os.environ.get("JETSON_IP", "")
     print("=" * 60)
     print("  GLaDOS Pipeline")
     print("  Brain:   Bonsai-8B @ localhost:8080")
     print("  Speech:  glados_daemon  → /tmp/glados_request.json")
     print("  Mic:     default input device")
+    print(f"  Vision:  {'Jetson @ ' + jetson_ip if jetson_ip else 'disabled (set JETSON_IP to enable)'}")
     print("=" * 60)
     print()
 
     global listener
+    vision.start()
+
     listener = SpeechListener(
         on_transcription=on_transcription,
         language="en",
