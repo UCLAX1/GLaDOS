@@ -8,74 +8,65 @@ import mujoco.viewer
 # https://quaternion.readthedocs.io/en/latest/quaternion/#quaternion.rotate_vectors
 def rotate_vector_by_quat(v: np.ndarray, q: np.quaternion):
   q_float_array = quaternion.as_float_array(q)
-  s = q_float_array[0]
-  r = q_float_array[1:]
-  m = np.sum(q_float_array**2)
-
-
-  # print("----")
-  # print("q:", q)
-  # print("q float array:", q_float_array)
-  # print("scalar part:", s)
-  # print("vector part:", r)
-  # print("sum of squares:", m)
-
-  # print("----")
+  s = q_float_array[0] # scalar part
+  r = q_float_array[1:] # vector part
+  m = np.sum(q_float_array**2) # sum of squares
 
   return v + 2 * np.cross(r, s*v + np.cross(r, v)) / m
 
-def pol2cart(rho, theta):
-  return rho * np.array([np.cos(theta), np.sin(theta)])
+def pol2cart(r, theta):
+  return r * np.array([np.cos(theta), np.sin(theta)])
 
 
-DEFAULT_PLATFORM_NORMAL_VECTOR = np.array([0, 0, 1])
 
 class StewartPlatform:
-  # all values in meters and radians
-  # ROD_LENGTH = 0.08
-  ROD_LENGTH = 0.16
-  SERVO_ARM_LENGTH = 0.08
-  # LEVEL_PLATFORM_SERVO_ANGLE = np.deg2rad(150)
-  LEVEL_PLATFORM_SERVO_ANGLE = np.deg2rad(0)
-  INITIAL = 0.002
-  # MIN_SERVO_ANGLE = np.deg2rad(120)
-  # MAX_SERVO_ANGLE = np.deg2rad(180)
-  # MIN_SERVO_ANGLE = np.deg2rad(-45)
-  # MAX_SERVO_ANGLE = np.deg2rad(45)
 
-  PLATFORM_RADIUS = 0.12
-  # PLATFORM_HALF_LENGTH = 0.004
+  DEFAULT_PLATFORM_NORMAL_VECTOR = np.array([0, 0, 1])
 
-  BASE_TO_SERVO_DISTANCE = 0.1
+  def __init__(self,
+    rod_length,
+    servo_arm_length,
+    platform_radius,
+    base_to_servo_distance,
+    base_to_ball_distance,
+    ball_radius,
+  ):
+    """
+    init function
 
-  PLATFORM_EDGE_VECTORS = np.array([
-    [*pol2cart(PLATFORM_RADIUS, 0 * np.pi / 3), 0.0],
-    [*pol2cart(PLATFORM_RADIUS, 2 * np.pi / 3), 0.0],
-    [*pol2cart(PLATFORM_RADIUS, 4 * np.pi / 3), 0.0],
-  ])
+    :param rod_length: length of the rod that connects the servo arm to the platform
+    :param servo_arm_length: length of the arm that connects the servo to the rod
+    :param platform_radius: radius of the platform
+    :param base_to_servo_distance: distance from the middle of the base to the servo
+    :param base_to_ball_distance: length from the middle of the base to the center of the ball
+    :param ball_radius: distance from the center of the ball to the center of the platform
+    """
+    # all values in meters and radians
+    self.rod_length = rod_length
+    self.servo_arm_length = servo_arm_length
+    self.platform_radius = platform_radius
+    self.platform_edge_vectors = np.array([
+      [*pol2cart(self.platform_radius, 0 * np.pi / 3), 0.0],
+      [*pol2cart(self.platform_radius, 2 * np.pi / 3), 0.0],
+      [*pol2cart(self.platform_radius, 4 * np.pi / 3), 0.0],
+    ])
+    self.base_to_servo_distance = base_to_servo_distance
+    self.servo_vectors = np.array([
+      [*pol2cart(self.base_to_servo_distance, 0 * np.pi / 3), 0.0],
+      [*pol2cart(self.base_to_servo_distance, 2 * np.pi / 3), 0.0],
+      [*pol2cart(self.base_to_servo_distance, 4 * np.pi / 3), 0.0],
+    ])
 
-  SERVO_VECTORS = np.array([
-    [*pol2cart(BASE_TO_SERVO_DISTANCE, 0 * np.pi / 3), 0.0],
-    [*pol2cart(BASE_TO_SERVO_DISTANCE, 2 * np.pi / 3), 0.0],
-    [*pol2cart(BASE_TO_SERVO_DISTANCE, 4 * np.pi / 3), 0.0],
-  ])
+    self.base_to_ball_distance = base_to_ball_distance
+    self.base_to_ball_center_vector = np.array([0, 0, self.base_to_ball_distance])
+    self.ball_radius = ball_radius
 
-  # BASE_TO_BALL_DISTANCE = 0.12
-  BASE_TO_BALL_DISTANCE = 0.13
-  BASE_TO_BALL_CENTER_VECTOR = np.array([0, 0, BASE_TO_BALL_DISTANCE])
-  BALL_RADIUS = 0.025
-
-  def __init__(self):
-    pass
-
-  @classmethod
   def find_servo_angles(
-    cls,
+    self,
     target_platform_normal_vector
     ):
-    # global DEFAULT_PLATFORM_NORMAL_VECTOR
 
-    platform_rotation_axis = np.cross(DEFAULT_PLATFORM_NORMAL_VECTOR, target_platform_normal_vector)
+    platform_rotation_axis = np.cross(self.DEFAULT_PLATFORM_NORMAL_VECTOR, target_platform_normal_vector)
     sin_value = np.linalg.norm(platform_rotation_axis)
     if (sin_value == 0):
       platform_rotation_axis = np.array([0, 0, 0])
@@ -87,25 +78,21 @@ class StewartPlatform:
     # see https://quaternion.readthedocs.io/en/latest/quaternion/#quaternion.from_rotation_vector
     platform_rotation_quat = quaternion.from_rotation_vector(platform_rotation_axis)
 
-    ball_center_to_edge_vector = cls.BALL_RADIUS * target_platform_normal_vector
+    ball_center_to_edge_vector = self.ball_radius * target_platform_normal_vector
 
     servo_angles = []
 
     for i in range(3):
-      platform_edge_vector = cls.PLATFORM_EDGE_VECTORS[i]
-      servo_vector = cls.SERVO_VECTORS[i]
-
-      # print("edge vector: ", platform_edge_vector)
-      # print("rotation quat: ", platform_rotation_quat)
+      platform_edge_vector = self.platform_edge_vectors[i]
+      servo_vector = self.servo_vectors[i]
 
       rotated_platform_edge_vector = rotate_vector_by_quat(platform_edge_vector, platform_rotation_quat)
 
-      servo_to_platform_edge_vector = cls.BASE_TO_BALL_CENTER_VECTOR + ball_center_to_edge_vector + rotated_platform_edge_vector - servo_vector
+      servo_to_platform_edge_vector = self.base_to_ball_center_vector + ball_center_to_edge_vector + rotated_platform_edge_vector - servo_vector
       l_z = servo_to_platform_edge_vector[2]
       l = np.linalg.norm(servo_to_platform_edge_vector)
-      a = cls.SERVO_ARM_LENGTH
-      s = cls.ROD_LENGTH
-
+      a = self.servo_arm_length
+      s = self.rod_length
 
       servo_angle = np.arcsin(l_z / l) - np.arccos((l**2 + a**2 - s**2) / (2 * l * a))
 
@@ -113,10 +100,8 @@ class StewartPlatform:
       # print((l**2 + a**2 - s**2) / (2 * l * a))
 
       servo_angles.append(servo_angle)
-      # servo_angles.append(servo_to_platform_edge_vector)
 
     return np.array(servo_angles)
-    # servo_angles = []
 
 
 
@@ -161,6 +146,29 @@ def move_servos(model, data, servo_0_val, servo_1_val, servo_2_val):
 
 
 with mujoco.viewer.launch_passive(m, d) as viewer:
+
+  # print(d.body("rod_and_ball").xpos)
+  middle_rod_length = m.geom("middle_rod").size[1] * 2
+  base_half_length = m.geom("base_plate").size[1]
+  base_radius = m.geom("base_plate").size[0]
+  platform_half_length = m.geom("platform").size[1]
+  platform_radius = m.geom("platform").size[0]
+  servo_arm_length = m.geom("servo_arm_a").size[1] * 2
+  rod_length = m.geom("rod_geom_a").size[1] * 2
+  ball_radius = m.geom("ball").size[0] + platform_half_length 
+  base_to_ball_distance = middle_rod_length + base_half_length
+  base_to_servo_distance = base_radius
+
+
+  stewart_platform = StewartPlatform(
+    rod_length = rod_length,
+    servo_arm_length = servo_arm_length,
+    platform_radius = platform_radius,
+    base_to_servo_distance = base_radius,
+    base_to_ball_distance = base_to_ball_distance,
+    ball_radius = ball_radius,
+  )
+
   # Close the viewer automatically after 30 wall-seconds.
   start = time.time()
   while viewer.is_running():
@@ -197,7 +205,7 @@ with mujoco.viewer.launch_passive(m, d) as viewer:
 
     target_platform_normal_vector = np.array([np.cos(theta) * np.sin(phi), np.sin(theta) * np.sin(phi), np.cos(phi)])
 
-    servo_angles = StewartPlatform.find_servo_angles(target_platform_normal_vector)
+    servo_angles = stewart_platform.find_servo_angles(target_platform_normal_vector)
     move_servos(m, d, *servo_angles)
 
     # placeholder test code because get_servo_vals_from_angles() is broken
