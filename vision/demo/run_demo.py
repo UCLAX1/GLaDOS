@@ -21,7 +21,8 @@ Usage (from the repo root, after `python vision/demo/setup_demo.py`):
     ... run_demo.py --source zed --rotate 180                             # camera upside down
     ... run_demo.py --no-window                                           # browser only
 
-Keys: 1-5 toggle a feature, r register a face (type name, Enter), f fullscreen, q quit.
+Keys: 1-5 toggle a feature, r register a face (type name, Enter; only that person in view),
+      x cancel registering, f fullscreen, q quit.
 Browser: http://<this machine>:8080/  (same view, buttons for the same controls)
 """
 
@@ -31,6 +32,7 @@ import signal
 import socket
 import sys
 import time
+import traceback
 from pathlib import Path
 
 # A sourced ROS workspace puts its packages on PYTHONPATH, ahead of the venv's;
@@ -59,6 +61,12 @@ DISPLAY_HZ = 30
 
 def local_ips():
     ips = set()
+    try:                                           # every interface, incl. Tailscale (100.x)
+        import subprocess
+        ips |= set(subprocess.run(["hostname", "-I"], capture_output=True, text=True,
+                                  timeout=2).stdout.split())
+    except Exception:
+        pass
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("10.255.255.255", 1))           # no packet is sent
@@ -70,7 +78,8 @@ def local_ips():
         ips |= {a[4][0] for a in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)}
     except OSError:
         pass
-    return sorted(i for i in ips if not i.startswith("127."))
+    ips = [i for i in ips if "." in i and not i.startswith("127.")]   # IPv4 only
+    return sorted(ips, key=lambda i: not i.startswith("100."))     # Tailscale first
 
 
 def report(source, workers) -> int:
@@ -154,6 +163,7 @@ def main():
     fullscreen = args.fullscreen
 
     pending = list(workers)
+    crashed = False
     t_loaded = None                                    # when every module finished loading
     try:
         while running:
@@ -187,6 +197,10 @@ def main():
                     break
                 elif key == ord("r"):
                     comp.typing = ""
+                elif key == ord("x"):
+                    face = hub.get("face")
+                    comp.say(face.cancel_register() if face and hasattr(face, "cancel_register")
+                             else "face recognition is not running")
                 elif key == ord("f"):
                     fullscreen = not fullscreen
                     cv2.setWindowProperty(WINDOW, cv2.WND_PROP_FULLSCREEN,
@@ -201,9 +215,14 @@ def main():
                 except cv2.error:
                     break
             time.sleep(max(0.0, 1 / DISPLAY_HZ - (time.time() - t0)))
+    except Exception:
+        # os._exit below would swallow the traceback: print it first
+        traceback.print_exc()
+        crashed = True
     finally:
         print("[demo] stopping")
         code = report(source, workers) if args.check else 0
+        code = 1 if crashed else code
         for w in workers:
             w.stop()
         source.stop()                                  # releases the camera

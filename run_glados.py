@@ -43,6 +43,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from central_ai.brain import GladosBrain
 from listening.listener import SpeechListener
 from speech.speech_queue import enqueue
+from vision.vision_client import VisionClient
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 # Gestures run in the simulator by default. Set GLADOS_HARDWARE=1 to drive the
@@ -64,6 +65,7 @@ GESTURE_MAP = {
 brain      = GladosBrain()
 brain_lock = threading.Lock()   # one LLM request at a time
 listener   = None               # set in main(); read for per-utterance timings
+vision     = VisionClient()     # polls Jetson at 5 Hz; no-op if JETSON_IP unset
 turns: list[dict] = []          # per-turn stage timings, summarised on exit
 
 
@@ -125,8 +127,10 @@ def on_transcription(text: str):
     dispatch  = 0.0
     sentences = 0
 
+    perception = vision.context_string()
+
     with brain_lock:
-        for sentence in brain.respond_stream(text):
+        for sentence in brain.respond_stream(text, perception=perception):
             t_disp = time.time()
             if llm_first is None:
                 llm_first = t_disp - t0
@@ -235,6 +239,7 @@ def main():
     print()
 
     global listener
+    vision.start()
     listener = SpeechListener(
         on_transcription=on_transcription,
         language="en",

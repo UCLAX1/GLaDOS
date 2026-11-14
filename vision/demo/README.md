@@ -43,9 +43,18 @@ vision/demo/.venv/bin/python vision/demo/run_demo.py            # Windows: visio
 | `--fullscreen` / `--no-window` | projector / browser only |
 | `--web 8080` | browser view port, 0 = off |
 
-**Keys:** `1`–`5` turn a feature on or off. `r` registers a face: type a name and press Enter, then turn your head slowly. `f` toggles fullscreen and `q` quits.
+**Keys:** `1`–`5` turn a feature on or off, `f` toggles fullscreen and `q` quits. To register a face, press `r`, type the name and press Enter (`x` cancels).
 
-**Browser view:** go to `http://<machine-ip>:8080/` from any device on the same network. It shows the same dashboard, with buttons that toggle features and register faces. The terminal prints the URL at startup.
+**Browser view:** go to `http://<machine-ip>:8080/` from any device on the same network. Tailscale's `http://100.73.92.3:8080/` works from anywhere on the tailnet; campus Wi-Fi often blocks device-to-device traffic. The terminal prints every address at startup. The page shows the same dashboard plus:
+* a button for each feature, to turn it on or off
+* **Register** / **Cancel**, a ✕ on each known name to forget that face, and **Forget all**
+
+**Registering faces:**
+* Only the person being registered may be in view. Sampling pauses while 2+ faces are visible, so a bystander can't be recorded under someone else's name.
+* Turn your head slowly until it reaches 15/15. That takes about 20–80 s on the Jetson and gives up after 90 s.
+* A face that's already registered under another name is refused, and the message says whose it is.
+* Names: each face labels one person only, a name belongs to one person at a time, and two "unknown" results in a row clear a wrong name.
+* Faces are saved to `vision/known_faces/<name>.npy`, which is gitignored.
 
 ## Demo-day checklist
 
