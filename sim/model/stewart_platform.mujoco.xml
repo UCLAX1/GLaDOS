@@ -1,5 +1,8 @@
 <!-- perhaps look into here for implementing this pythonically: -->
 <!--  https://github.com/google-deepmind/dm_control/blob/main/dm_control/mjcf/README.md -->
+
+<!-- reference: -->
+<!-- https://github.com/NickNair/mujoco-stewart-platform/blob/main/models/stewart_platform.xml -->
 <mujoco>
   <!-- <option integrator="RK4"/> -->
   <option timestep="0.002" gravity="0 0 -9.81" integrator="RK4"/>

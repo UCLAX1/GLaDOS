@@ -5,6 +5,12 @@ import quaternion
 import mujoco
 import mujoco.viewer
 
+# inverse kinematics referenced from:
+# https://memememememememe.me/post/stewart-platform-math/
+
+# another good resource:
+# https://raw.org/research/inverse-kinematics-of-a-stewart-platform/
+
 # https://quaternion.readthedocs.io/en/latest/quaternion/#quaternion.rotate_vectors
 def rotate_vector_by_quat(v: np.ndarray, q: np.quaternion):
   q_float_array = quaternion.as_float_array(q)
@@ -16,8 +22,6 @@ def rotate_vector_by_quat(v: np.ndarray, q: np.quaternion):
 
 def pol2cart(r, theta):
   return r * np.array([np.cos(theta), np.sin(theta)])
-
-
 
 class StewartPlatform:
 
@@ -31,8 +35,7 @@ class StewartPlatform:
     base_to_ball_distance,
     ball_radius,
   ):
-    """
-    init function
+    """init function
 
     :param rod_length: length of the rod that connects the servo arm to the platform
     :param servo_arm_length: length of the arm that connects the servo to the rod
@@ -174,29 +177,8 @@ with mujoco.viewer.launch_passive(m, d) as viewer:
   while viewer.is_running():
     step_start = time.time()
 
-    # theta = 0
-    # # phi = 0.1
-    # phi = 0.00001
-
     # mujoco.mj_kinematics(m, d)
 
-    # debug_rod_geom.pos = servo_geom_a
-    # debug_rod_geom
-    # platform_geom = d.geom("platform")
-    # print(platform_site_a.xpos - servo_geom_a.xpos)
-    # print(platform_site_a.xpos)
-    # print(StewartPlatform.PLATFORM_EDGE_VECTORS[0])
-    # print(d.geom("ball").xpos - d.geom("platform").xpos)
-    # exit(0)
-
-    # theta, phi = update_angles(theta, phi)
-    # servo_vals = get_servo_vals_from_angles(theta, phi)
-
-    # t = 0.005 * np.sin(2 * np.pi * time.time() / 2)
-
-    # theta = 0
-    # phi = t
-    # phi = 0.0001
     theta_slider_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, "theta_slider")
     phi_slider_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, "phi_slider")
 
@@ -207,9 +189,6 @@ with mujoco.viewer.launch_passive(m, d) as viewer:
 
     servo_angles = stewart_platform.find_servo_angles(target_platform_normal_vector)
     move_servos(m, d, *servo_angles)
-
-    # placeholder test code because get_servo_vals_from_angles() is broken
-    # move_servos(m, d, t, -t, 0)
 
     # mj_step can be replaced with code that also evaluates
     # a policy and applies a control signal before stepping the physics.

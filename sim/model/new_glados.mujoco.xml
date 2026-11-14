@@ -1,0 +1,74 @@
+<mujoco>
+  <!-- <option integrator="RK4"/> -->
+  <option timestep="0.002" gravity="0 0 -9.81" integrator="RK4"/>
+
+
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" width="512" height="512" rgb1=".1 .2 .3" rgb2=".2 .3 .4"/>
+    <material name="grid" texture="grid" texrepeat="2 2" texuniform="true" reflectance=".2"/>
+
+  </asset>
+  <worldbody>
+    <!-- <light pos=".3 -.3 .8" mode="trackcom" diffuse="1 1 1" specular=".3 .3 .3"/> -->
+    <light pos="0 0 4"/>
+    <geom name="floor" type="plane" size="3 3 .01" pos="-0.025 -0.295  0" material="grid"/>
+
+    
+
+    <body name="base" pos="0 0 2.5">
+        <geom name="base_box" type="box" pos="0 0 0.1" size="0.12 0.08 0.1"/>
+        <geom name="shoulder_stud" type="box" fromto="0 0 0 0 0 -0.1" size="0.025"/>
+
+        <body name="shoulder" pos="0 0 -0.15">
+          <joint name="shoulder_joint" type="hinge" pos="0 0 0" axis="1 0 0"/>
+          <geom name="shoulder_rod" type="box" fromto="0 0 0 0 0 -0.720" size="0.025"/>
+
+          <body name="elbow" pos="0 0 -0.770">
+            <joint name="elbow_joint" type="hinge" pos="0 0 0" axis="1 0 0"/>
+            <geom name="elbow_rod" type="box" fromto="0 0 0 0 0 -0.480" size="0.025"/>
+
+            <body name="head" pos="0 0 -0.680">
+              <joint name="head_joint" type="ball" pos="0 0 0.16" axis="1 0 0"/>
+              <geom name="head_geom" type="cylinder" size="0.127 0.05" euler="0 90 0"/>
+              <geom name="eye_geom" type="cylinder" pos="0 0 -0.13" size="0.015 0.005" rgba="1 1 0 1"/>
+
+            </body>
+          </body>
+        </body>
+    </body>
+
+  </worldbody>
+
+  <tendon>
+    <!-- <spatial name="platform_ball_link" limited="true" range="0 0.021" width="0.003">
+      <site site="platform_center_site"/>
+      <site site="ball_center_site"/>
+    </spatial> -->
+
+  </tendon>
+
+  <actuator>
+    <position name="shoulder_motor" joint="shoulder_joint" kp="80" dampratio="1" ctrlrange="-1.57 1.57"/>
+    <position name="elbow_motor" joint="elbow_joint" kp="80" dampratio="1" ctrlrange="-1.57 1.57"/>
+    <position name="head_motor" joint="head_joint"/>
+    <!-- <position name="head_motor" joint="head_joint" kp="80" dampratio="1" ctrlrange="-1.57 1.57"/> -->
+
+    <!-- <general name="theta_slider" joint="servo_group_hinge_a" gainprm="0" ctrllimited="true" ctrlrange="-180 180"/>
+    <general name="phi_slider" joint="servo_group_hinge_a" gainprm="0" ctrllimited="true" ctrlrange="180 120"/> -->
+
+  </actuator>
+
+  <contact>
+    <!-- <exclude body1="group_a" body2="platform_and_sites"/>
+    <exclude body1="group_b" body2="platform_and_sites"/>
+    <exclude body1="group_c" body2="platform_and_sites"/> -->
+
+  </contact>
+
+  <equality>
+    <!-- <connect site1="rod_geom_tip_site_a" site2="platform_site_a"/>
+    <connect site1="rod_geom_tip_site_b" site2="platform_site_b"/>
+    <connect site1="rod_geom_tip_site_c" site2="platform_site_c"/> -->
+
+  </equality>
+</mujoco>
