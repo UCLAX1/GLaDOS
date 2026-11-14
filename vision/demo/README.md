@@ -28,6 +28,27 @@ Setup creates `vision/demo/.venv`, installs everything and downloads all models,
 
 ## Run
 
+**One click:** on the Jetson, double-click **GLaDOS Vision Demo** on the desktop or in the app menu. It opens fullscreen. Install the icon once with `vision/demo/start_demo.sh --install-desktop`.
+
+**One command:**
+
+```bash
+vision/demo/start_demo.sh                 # Linux / Mac; any extra flags go to run_demo.py
+vision\demo\start_demo.bat               # Windows laptop
+vision/demo/start_demo.sh --stop          # stop it (releases the camera)
+```
+
+`start_demo.sh` picks the flags for the machine it's on:
+* ZED Mini plugged in: `--source zed --rotate 180`. The Jetson's ZED is mounted upside down; set `DEMO_ROTATE=0` once it's upright.
+* No ZED: the laptop webcam.
+* No screen (SSH session): `--no-window`, so use the browser view.
+* A demo is already running: it refuses to start a second copy, since two copies fight over the camera.
+* Only half the ZED is detected: it tells you to flip the cable.
+
+The icon and launcher run whatever branch is checked out in `~/Documents/GLaDOS`. If the launcher is missing, switch back to `main`.
+
+**By hand:**
+
 ```bash
 vision/demo/.venv/bin/python vision/demo/run_demo.py            # Windows: vision\demo\.venv\Scripts\python
 ```
@@ -52,6 +73,7 @@ vision/demo/.venv/bin/python vision/demo/run_demo.py            # Windows: visio
 **Registering faces:**
 * Only the person being registered may be in view. Sampling pauses while 2+ faces are visible, so a bystander can't be recorded under someone else's name.
 * Turn your head slowly until it reaches 15/15. That takes about 20–80 s on the Jetson and gives up after 90 s.
+* Tracking, gestures and expression **pause while registering**, so face recognition gets the CPU. They show as "paused" and resume when it finishes, is cancelled or times out.
 * A face that's already registered under another name is refused, and the message says whose it is.
 * Names: each face labels one person only, a name belongs to one person at a time, and two "unknown" results in a row clear a wrong name.
 * Faces are saved to `vision/known_faces/<name>.npy`, which is gitignored.
@@ -79,4 +101,4 @@ Each feature runs at its own rate. Jetson numbers were measured with everything 
 
 On the Jetson, each library's CPU threads are capped (`workers.onnx_threads`, torch 2 threads). Without the caps the libraries fought over 6 cores and tracking fell to about 1 Hz.
 
-Environment overrides: `GESTURE_COMPLEXITY=0|1`, `DEMO_YOLO_IMGSZ=320`, `DEMO_FACE_PERIOD=1.0`, `DEMO_EXPR_HZ=6`, `ZED_DEPTH_MODE=PERFORMANCE`.
+Environment overrides: `GESTURE_COMPLEXITY=0|1`, `DEMO_YOLO_IMGSZ=320`, `DEMO_FACE_PERIOD=1.0`, `DEMO_EXPR_HZ=6`, `ZED_DEPTH_MODE=PERFORMANCE`, `DEMO_ROTATE=180` (start_demo.sh), `DEMO_FACES_DIR=<dir>` (use another folder of known faces, e.g. for tests).

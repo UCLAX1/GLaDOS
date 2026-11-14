@@ -38,6 +38,9 @@ SAMPLE_DIFF = 0.995        # skip samples this similar to one already taken (as 
 SAME_PERSON = 0.30         # a new sample must be at least this similar to the earlier ones
 REGISTER_TIMEOUT_S = 90         # ~15 samples at the Jetson's ~1-4 s per face pass
 NAME_HOLD_S = 30           # keep a name for a track this long after its face was last seen
+# modules that stand aside during registration so face recognition gets the CPU
+# (49 s -> see README for the measured time on the Jetson)
+PAUSE_WHILE_REGISTERING = ("track", "gesture", "expr")
 UNKNOWN_CLEARS = 2         # this many "unknown" results in a row clear a track's name
 
 
@@ -60,6 +63,9 @@ class FaceWorker(Worker):
         # recognition only needs the detector + embedding (~2x faster without them)
         fm.app.models = {k: m for k, m in fm.app.models.items() if k in ("detection", "recognition")}
         self.fm = fm
+        # where known faces live; DEMO_FACES_DIR points tests (or a separate demo set) elsewhere
+        self.faces_dir = os.environ.get("DEMO_FACES_DIR", fm.FACES_DIR)
+        os.makedirs(self.faces_dir, exist_ok=True)
         self.lock = threading.Lock()
         self.known = {}
         self.seen_ids = set()
@@ -74,9 +80,9 @@ class FaceWorker(Worker):
 
     def reload_known(self):
         known = {}
-        for f in sorted(os.listdir(self.fm.FACES_DIR)):
+        for f in sorted(os.listdir(self.faces_dir)):
             if f.endswith(".npy"):
-                e = np.load(os.path.join(self.fm.FACES_DIR, f), allow_pickle=False)
+                e = np.load(os.path.join(self.faces_dir, f), allow_pickle=False)
                 known[os.path.splitext(f)[0]] = e.reshape(1, -1) if e.ndim == 1 else e
         with self.lock:
             self.known = known
@@ -85,7 +91,7 @@ class FaceWorker(Worker):
         self.message = f"{len(known)} known: {', '.join(known) or 'none'}"
 
     def forget(self, name: str) -> str:
-        path = os.path.join(self.fm.FACES_DIR, f"{name}.npy")
+        path = os.path.join(self.faces_dir, f"{name}.npy")
         if not re.fullmatch(r"[A-Za-z0-9_-]+", name) or not os.path.exists(path):
             return f"no registered face called {name!r}"
         os.remove(path)
@@ -95,7 +101,7 @@ class FaceWorker(Worker):
     def forget_all(self) -> str:
         names = list(self.known)
         for n in names:
-            os.remove(os.path.join(self.fm.FACES_DIR, f"{n}.npy"))
+            os.remove(os.path.join(self.faces_dir, f"{n}.npy"))
         self.reload_known()
         return f"forgot {len(names)} face(s)"
 
@@ -117,20 +123,31 @@ class FaceWorker(Worker):
             return f"face recognition is {self.state}"
         self.samples, self.registering, self.register_t = [], name, time.time()
         self.register_status = f"registering {name}: only {name} in view, slowly turn your head"
+        self._pause_others(f"registering {name}")
         return self.register_status
+
+    def _pause_others(self, why: str):
+        for key in PAUSE_WHILE_REGISTERING:
+            w = self.hub.get(key)
+            if w is not None:
+                w.paused_for = why
+                w.paused_until = time.time() + REGISTER_TIMEOUT_S + 10 if why else 0.0
+
+    def _end_registration(self, status: str):
+        self.registering = None
+        self.register_status = status
+        self._pause_others("")
 
     def cancel_register(self) -> str:
         if not self.registering:
             return "not registering"
-        name, self.registering = self.registering, None
-        self.register_status = f"registration of {name} cancelled"
+        self._end_registration(f"registration of {self.registering} cancelled")
         return self.register_status
 
     def _take_sample(self, faces):
         name, n = self.registering, self.fm.NUM_SAMPLES
         if time.time() - self.register_t > REGISTER_TIMEOUT_S:
-            self.registering = None
-            self.register_status = f"registration of {name} timed out ({len(self.samples)}/{n}); try again"
+            self._end_registration(f"registration of {name} timed out ({len(self.samples)}/{n}); try again")
             return
         if len(faces) != 1:
             self.register_status = (f"registering {name} {len(self.samples)}/{n}: paused, "
@@ -139,8 +156,7 @@ class FaceWorker(Worker):
         e = faces[0].normed_embedding
         other, score = self.best_match(e)
         if other not in ("unknown", name):
-            self.registering = None
-            self.register_status = f"not saved: that face is already registered as {other} ({score:.2f})"
+            self._end_registration(f"not saved: that face is already registered as {other} ({score:.2f})")
             return
         if self.samples and float(np.mean([np.dot(e, s) for s in self.samples])) < SAME_PERSON:
             self.register_status = f"registering {name} {len(self.samples)}/{n}: skipped a sample that looks like someone else"
@@ -149,13 +165,12 @@ class FaceWorker(Worker):
             self.samples.append(e.copy())
         self.register_status = f"registering {name}: {len(self.samples)}/{n}, keep turning your head slowly"
         if len(self.samples) >= n:
-            path = os.path.join(self.fm.FACES_DIR, f"{name}.npy")
+            path = os.path.join(self.faces_dir, f"{name}.npy")
             tmp = path + ".tmp.npy"
             np.save(tmp, np.array(self.samples, dtype=np.float32))
             os.replace(tmp, path)
             print(f"[face] saved {n} samples for {name}")
-            self.registering = None
-            self.register_status = f"registered {name}"
+            self._end_registration(f"registered {name}")
             self.reload_known()
 
     # ── Per frame ─────────────────────────────────────────────────────────────
@@ -226,6 +241,11 @@ class FaceWorker(Worker):
         with self.lock:
             v = self.track_names.get(track_id)
         return v["name"] if v else None
+
+    def toggle(self):
+        if self.registering:                     # turning faces off must not strand the pause
+            self._end_registration(f"registration of {self.registering} cancelled")
+        super().toggle()
 
     def status_line(self):
         s = super().status_line()

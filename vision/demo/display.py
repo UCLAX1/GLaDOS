@@ -167,7 +167,7 @@ class Compositor:
         _text(pn, f"camera {self.source.fps:4.1f} fps   display {self.fps:4.1f} fps", (18, y), 0.45, GREY)
         y += 34
         for wk in self.w.values():
-            color = STATE_COLORS.get(wk.state, GREY)
+            color = AMBER if wk.paused_for and wk.state == "running" else STATE_COLORS.get(wk.state, GREY)
             cv2.circle(pn, (26, y - 5), 6, color, -1)
             _text(pn, f"[{wk.hotkey}] {wk.label}", (40, y), 0.55, WHITE)
             y += 20
@@ -211,7 +211,9 @@ class Compositor:
                       "registering": bool(loaded and fw.registering),
                       "message": (fw.register_status if loaded else "")},
             "camera": {"status": self.source.status, "fps": round(self.source.fps, 1)},
-            "modules": {k: {"label": w.label, "state": w.state, "hz": round(w.hz, 1),
+            "modules": {k: {"label": w.label,
+                            "state": "paused" if w.paused_for and w.state == "running" else w.state,
+                            "hz": round(w.hz, 1),
                             "ms": round(w.ms), "message": w.error or w.message} for k, w in self.w.items()},
             "people": [{k: v for k, v in p.items() if k != "box"} for p in self.people],
         }
@@ -228,7 +230,7 @@ header,section{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8p
 h1{font-size:18px;margin:0 12px 0 0}
 button{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:7px 12px;cursor:pointer;font:inherit}
 button:active{transform:translateY(1px)}
-button.on{border-color:var(--ok);color:#9f9}button.off{color:var(--dim)}
+button.on{border-color:var(--ok);color:#9f9}button.off,button.paused{color:var(--dim)}
 button.unavailable,button.error{border-color:var(--bad);color:#f99}
 button.small{padding:3px 8px;font-size:13px}
 input{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:7px;font:inherit}
