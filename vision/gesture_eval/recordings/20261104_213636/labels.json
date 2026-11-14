@@ -1,0 +1,274 @@
+{
+  "created": "2026-11-04 21:38:04",
+  "source": "ZED Mini left lens via V4L2 (unrectified)",
+  "frame_size": [
+    1280,
+    720
+  ],
+  "fps": 26.79,
+  "frames": 2209,
+  "quick": false,
+  "aborted": false,
+  "segments": [
+    {
+      "key": "transition",
+      "prompt": "GET READY: STAND STILL, arms down",
+      "expect": {},
+      "start": 0,
+      "end": 51,
+      "settle_s": null
+    },
+    {
+      "key": "idle",
+      "prompt": "STAND STILL, arms down",
+      "expect": {},
+      "start": 51,
+      "end": 159,
+      "settle_s": 0.5
+    },
+    {
+      "key": "transition",
+      "prompt": "GET READY: RIGHT hand: POINT TO YOUR LEFT",
+      "expect": {},
+      "start": 159,
+      "end": 214,
+      "settle_s": null
+    },
+    {
+      "key": "point_left",
+      "prompt": "RIGHT hand: POINT TO YOUR LEFT",
+      "expect": {
+        "right": "pointing left"
+      },
+      "start": 214,
+      "end": 295,
+      "settle_s": 0.7
+    },
+    {
+      "key": "transition",
+      "prompt": "GET READY: RIGHT hand: POINT TO YOUR RIGHT",
+      "expect": {},
+      "start": 295,
+      "end": 349,
+      "settle_s": null
+    },
+    {
+      "key": "point_right",
+      "prompt": "RIGHT hand: POINT TO YOUR RIGHT",
+      "expect": {
+        "right": "pointing right"
+      },
+      "start": 349,
+      "end": 430,
+      "settle_s": 0.7
+    },
+    {
+      "key": "transition",
+      "prompt": "GET READY: RIGHT hand: POINT UP",
+      "expect": {},
+      "start": 430,
+      "end": 484,
+      "settle_s": null
+    },
+    {
+      "key": "point_up",
+      "prompt": "RIGHT hand: POINT UP",
+      "expect": {
+        "right": "pointing up"
+      },
+      "start": 484,
+      "end": 565,
+      "settle_s": 0.7
+    },
+    {
+      "key": "transition",
+      "prompt": "GET READY: RIGHT hand: POINT DOWN",
+      "expect": {},
+      "start": 565,
+      "end": 619,
+      "settle_s": null
+    },
+    {
+      "key": "point_down",
+      "prompt": "RIGHT hand: POINT DOWN",
+      "expect": {
+        "right": "pointing down"
+      },
+      "start": 619,
+      "end": 699,
+      "settle_s": 0.7
+    },
+    {
+      "key": "transition",
+      "prompt": "GET READY: RIGHT hand: POINT AT THE CAMERA",
+      "expect": {},
+      "start": 699,
+      "end": 753,
+      "settle_s": null
+    },
+    {
+      "key": "point_camera",
+      "prompt": "RIGHT hand: POINT AT THE CAMERA",
+      "expect": {},
+      "start": 753,
+      "end": 834,
+      "settle_s": 0.7
+    },
+    {
+      "key": "transition",
+      "prompt": "GET READY: WAVE your RIGHT arm (hand at face height)",
+      "expect": {},
+      "start": 834,
+      "end": 888,
+      "settle_s": null
+    },
+    {
+      "key": "wave_right",
+      "prompt": "WAVE your RIGHT arm (hand at face height)",
+      "expect": {
+        "right": "waving"
+      },
+      "start": 888,
+      "end": 1023,
+      "settle_s": 1.5
+    },
+    {
+      "key": "transition",
+      "prompt": "GET READY: WAVE your LEFT arm (hand at face height)",
+      "expect": {},
+      "start": 1023,
+      "end": 1078,
+      "settle_s": null
+    },
+    {
+      "key": "wave_left",
+      "prompt": "WAVE your LEFT arm (hand at face height)",
+      "expect": {
+        "left": "waving"
+      },
+      "start": 1078,
+      "end": 1213,
+      "settle_s": 1.5
+    },
+    {
+      "key": "transition",
+      "prompt": "GET READY: RAISE your RIGHT hand above your head, palm open",
+      "expect": {},
+      "start": 1213,
+      "end": 1266,
+      "settle_s": null
+    },
+    {
+      "key": "raise_right",
+      "prompt": "RAISE your RIGHT hand above your head, palm open",
+      "expect": {
+        "right": "hand raised"
+      },
+      "start": 1266,
+      "end": 1346,
+      "settle_s": 0.7
+    },
+    {
+      "key": "transition",
+      "prompt": "GET READY: RIGHT hand: THUMBS UP",
+      "expect": {},
+      "start": 1346,
+      "end": 1400,
+      "settle_s": null
+    },
+    {
+      "key": "thumbs_up",
+      "prompt": "RIGHT hand: THUMBS UP",
+      "expect": {
+        "right": "thumbs up"
+      },
+      "start": 1400,
+      "end": 1481,
+      "settle_s": 0.7
+    },
+    {
+      "key": "transition",
+      "prompt": "GET READY: RIGHT hand: THUMBS DOWN",
+      "expect": {},
+      "start": 1481,
+      "end": 1535,
+      "settle_s": null
+    },
+    {
+      "key": "thumbs_down",
+      "prompt": "RIGHT hand: THUMBS DOWN",
+      "expect": {
+        "right": "thumbs down"
+      },
+      "start": 1535,
+      "end": 1617,
+      "settle_s": 0.7
+    },
+    {
+      "key": "transition",
+      "prompt": "GET READY: RIGHT hand: PEACE SIGN",
+      "expect": {},
+      "start": 1617,
+      "end": 1672,
+      "settle_s": null
+    },
+    {
+      "key": "peace",
+      "prompt": "RIGHT hand: PEACE SIGN",
+      "expect": {
+        "right": "peace sign"
+      },
+      "start": 1672,
+      "end": 1753,
+      "settle_s": 0.7
+    },
+    {
+      "key": "transition",
+      "prompt": "GET READY: Hands open in front of your chest, palms out, still",
+      "expect": {},
+      "start": 1753,
+      "end": 1807,
+      "settle_s": null
+    },
+    {
+      "key": "hands_visible",
+      "prompt": "Hands open in front of your chest, palms out, still",
+      "expect": {},
+      "start": 1807,
+      "end": 1913,
+      "settle_s": 0.7
+    },
+    {
+      "key": "transition",
+      "prompt": "GET READY: Talk with your hands (natural motion)",
+      "expect": {},
+      "start": 1913,
+      "end": 1967,
+      "settle_s": null
+    },
+    {
+      "key": "talking",
+      "prompt": "Talk with your hands (natural motion)",
+      "expect": {},
+      "start": 1967,
+      "end": 2074,
+      "settle_s": 0.7
+    },
+    {
+      "key": "transition",
+      "prompt": "GET READY: STAND STILL, arms down",
+      "expect": {},
+      "start": 2074,
+      "end": 2128,
+      "settle_s": null
+    },
+    {
+      "key": "idle_end",
+      "prompt": "STAND STILL, arms down",
+      "expect": {},
+      "start": 2128,
+      "end": 2209,
+      "settle_s": 0.5
+    }
+  ]
+}

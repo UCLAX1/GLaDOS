@@ -234,7 +234,7 @@ class GladosBrain:
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
-    def respond_stream(self, user_text: str) -> Iterator[str]:
+    def respond_stream(self, user_text: str, perception: str = "") -> Iterator[str]:
         """
         Stream the reply, yielding each complete sentence of speech as soon as
         it has been generated — long before gesture/look_at/mood arrive.
@@ -251,7 +251,14 @@ class GladosBrain:
         self.last_response = None
         self._history.append({"role": "user", "content": user_text})
         self._trim_history()
-        messages = [{"role": "system", "content": GLADOS_SYSTEM}] + FEW_SHOT + self._history
+        system = GLADOS_SYSTEM
+        if perception:
+            system += (
+                f"\n\n[Perception — camera sees: {perception}. "
+                "Use this to inform your response naturally when relevant; "
+                "do not read it aloud verbatim.]"
+            )
+        messages = [{"role": "system", "content": system}] + FEW_SHOT + self._history
 
         raw      = ""
         consumed = 0   # chars of speech already yielded

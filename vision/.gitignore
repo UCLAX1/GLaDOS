@@ -1,0 +1,2 @@
+vision/known_faces/*
+!vision/known_faces/.gitkeep
