@@ -18,6 +18,7 @@ Usage (from the repo root, after `python vision/demo/setup_demo.py`):
     ... run_demo.py --source zed                                          # ZED SDK, adds depth
     ... run_demo.py --source vision/gesture_eval/recordings/<run>/video.avi  # no camera needed
     ... run_demo.py --modules track,gesture --fullscreen
+    ... run_demo.py --source zed --rotate 180                             # camera upside down
     ... run_demo.py --no-window                                           # browser only
 
 Keys: 1-5 toggle a feature, r register a face (type name, Enter), f fullscreen, q quit.
@@ -95,6 +96,8 @@ def main():
     ap.add_argument("--web", type=int, default=8080, help="browser view port (0 = off)")
     ap.add_argument("--no-window", action="store_true", help="no OpenCV window (browser only)")
     ap.add_argument("--fullscreen", action="store_true")
+    ap.add_argument("--rotate", type=int, default=0, choices=[0, 90, 180, 270],
+                    help="degrees clockwise, for a camera mounted sideways or upside down")
     ap.add_argument("--height", type=int, default=720, help="camera height per lens (720 or 376/480)")
     ap.add_argument("--check", type=int, metavar="SECONDS",
                     help="headless self-test: run everything this long, print a table, exit 1 on failure")
@@ -103,7 +106,8 @@ def main():
         args.no_window, args.web = True, 0
 
     wanted = set(args.modules.split(","))
-    source = FrameSource(args.source, width=args.height * 16 // 9, height=args.height).start()
+    source = FrameSource(args.source, width=args.height * 16 // 9, height=args.height,
+                         rotate=args.rotate).start()
     print(f"[demo] camera: {source.spec}")
     hub = {}
     for cls in ALL:

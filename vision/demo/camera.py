@@ -46,13 +46,16 @@ def zed_available() -> bool:
 
 
 class FrameSource:
-    def __init__(self, spec: str = "auto", width: int = 1280, height: int = 720):
+    def __init__(self, spec: str = "auto", width: int = 1280, height: int = 720, rotate: int = 0):
         if spec == "auto":
             spec = "zed" if zed_available() else "webcam:0"
         self.spec = spec
         self.kind = ("zed" if spec == "zed" else
                      "webcam" if spec.startswith("webcam") else "video")
         self.width, self.height = width, height
+        # camera mounted sideways / upside down (GLaDOS hangs from the ceiling)
+        self.rotate = {0: None, 90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180,
+                       270: cv2.ROTATE_90_COUNTERCLOCKWISE}[rotate]
         self.status = "starting"
         self.fps = 0.0
         self._frame: Optional[Frame] = None
@@ -92,6 +95,9 @@ class FrameSource:
     # ── Reader thread ─────────────────────────────────────────────────────────
 
     def _publish(self, image, depth=None):
+        if self.rotate is not None:               # depth turns with the image so pixels still line up
+            image = cv2.rotate(image, self.rotate)
+            depth = cv2.rotate(depth, self.rotate) if depth is not None else None
         now = time.time()
         with self._fresh:
             prev = self._frame
@@ -119,7 +125,10 @@ class FrameSource:
         sys.path.insert(0, str(VISION_DIR / "depth"))
         from zed_depth import ZedDepth
         res = "HD720" if self.height >= 720 else "VGA"
-        zed = ZedDepth(mode=os.environ.get("ZED_DEPTH_MODE", "NEURAL_LIGHT"), resolution=res)
+        # 180 is done by the SDK on the GPU (free); 90/270 still rotate below
+        flip = self.rotate == cv2.ROTATE_180
+        zed = ZedDepth(mode=os.environ.get("ZED_DEPTH_MODE", "NEURAL_LIGHT"), resolution=res, flip=flip)
+        rotate, self.rotate = self.rotate, (None if flip else self.rotate)
         self.status = "opening ZED (first neural-depth start can take a minute)"
         zed.open()
         self.status = f"ZED {zed.width}x{zed.height} {zed.mode}"
@@ -129,6 +138,7 @@ class FrameSource:
                     raise RuntimeError("ZED grab failed")
                 self._publish(zed.left_image(), zed.depth_map().copy())
         finally:
+            self.rotate = rotate
             zed.close()
 
     def _run_opencv(self):
@@ -172,8 +182,9 @@ class FrameSource:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--source", default="auto")
+    ap.add_argument("--rotate", type=int, default=0, choices=[0, 90, 180, 270])
     args = ap.parse_args()
-    src = FrameSource(args.source).start()
+    src = FrameSource(args.source, rotate=args.rotate).start()
     print("Press Q to quit")
     seq = 0
     try:

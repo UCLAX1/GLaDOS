@@ -66,12 +66,13 @@ class ZedDepth:
     """
 
     def __init__(self, mode=DEFAULT_MODE, resolution=DEFAULT_RES, fps=DEFAULT_FPS,
-                 svo=None, max_depth_m=MAX_DEPTH_M):
+                 svo=None, max_depth_m=MAX_DEPTH_M, flip=False):
         self.mode        = mode
         self.resolution  = resolution
         self.fps         = fps
         self.svo         = svo
         self.max_depth_m = max_depth_m
+        self.flip        = flip              # camera mounted upside down: SDK rotates 180 on the GPU
 
         self.cam      = sl.Camera()
         self._runtime = sl.RuntimeParameters()
@@ -96,6 +97,7 @@ class ZedDepth:
         init.coordinate_units       = sl.UNIT.METER
         init.coordinate_system      = sl.COORDINATE_SYSTEM.RIGHT_HANDED_Z_UP
         init.depth_maximum_distance = self.max_depth_m
+        init.camera_image_flip      = sl.FLIP_MODE.ON if self.flip else sl.FLIP_MODE.OFF
         if self.svo:
             init.set_from_svo_file(str(self.svo))
             init.svo_real_time_mode = False      # every frame, as fast as we can
