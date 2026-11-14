@@ -1,9 +1,11 @@
 """
 depth.py — how far away is each tracked person (ZED SDK depth, metres).
 
-Takes the median depth of a patch in the middle of each person box (upper
-torso: rows 25-50% of the box, central 30% of its width), so background
-pixels at the box edges don't pull the value. Only available with --source zed.
+Takes a patch in the middle of each person box (upper torso: rows 25-50% of
+the box, central 30% of its width) and reports its 30th-percentile depth.
+The person is the nearest thing in their own box, so a low percentile keeps
+wall pixels behind the head/shoulders from pulling the value (the median
+jumped 0.9 m -> 2.8 m live when they did). Only available with --source zed.
 
 Result: {track_id: metres}
 """
@@ -11,6 +13,8 @@ Result: {track_id: metres}
 import numpy as np
 
 from workers import Worker
+
+NEAR_PERCENTILE = 30
 
 
 class DepthWorker(Worker):
@@ -36,5 +40,5 @@ class DepthWorker(Worker):
             patch = frame.depth[max(v1, 0):min(v2, h), max(u1, 0):min(u2, w)]
             patch = patch[np.isfinite(patch)]
             if patch.size:
-                out[p["id"]] = float(np.median(patch))
+                out[p["id"]] = float(np.percentile(patch, NEAR_PERCENTILE))
         return out

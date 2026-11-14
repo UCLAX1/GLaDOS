@@ -39,6 +39,7 @@ vision/demo/.venv/bin/python vision/demo/run_demo.py            # Windows: visio
 | `--source zed` | ZED SDK: adds depth distance (Jetson) |
 | `--source path/to/video.avi` | loops a recording instead of the camera (backup) |
 | `--modules track,gesture,face` | run only these features |
+| `--rotate 180` | camera mounted upside down (90 / 270 for sideways); depth turns with it |
 | `--fullscreen` / `--no-window` | projector / browser only |
 | `--web 8080` | browser view port, 0 = off |
 
