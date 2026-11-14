@@ -47,6 +47,8 @@ class Worker:
         self.hz = 0.0                    # smoothed calls per second
         self.load_s = 0.0
         self.errors = 0
+        self.paused_for = ""             # set by another module to borrow the CPU (e.g. face registration)
+        self.paused_until = 0.0          # safety net: the pause lapses at this time even if never lifted
         self._running = False
         self._thread = None
         self._last_run = 0.0
@@ -88,6 +90,8 @@ class Worker:
         return self.result
 
     def status_line(self) -> str:
+        if self.paused_for and self.state == "running":
+            return f"paused while {self.paused_for}"
         if self.state == "running":
             return f"{self.hz:4.1f} Hz {self.ms:5.0f} ms  {self.message}"
         if self.state == "loading":
@@ -111,7 +115,10 @@ class Worker:
 
         seq = 0
         while self._running:
-            if not self.enabled:
+            if self.paused_for and time.time() > self.paused_until:
+                self.paused_for = ""             # whoever paused us never resumed: resume anyway
+            if not self.enabled or self.paused_for:
+                self.hz = 0.0
                 time.sleep(0.1)
                 continue
             frame = self.source.wait_newer(seq, timeout=0.5)
