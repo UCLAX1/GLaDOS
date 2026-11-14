@@ -114,3 +114,4 @@ videos/
 vision/demo/.venv/
 vision/demo/models/
 vision/face_detector.tflite
+vision/gesture_eval/recordings/
