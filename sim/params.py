@@ -3,7 +3,7 @@
 glados.xml and push.xml are string.Templates; load with load_model(name), not from_xml_path.
 rot_* columns are TOTAL range in deg: swivel/head are symmetric (+-half), lower_arm is 0..total.
 """
-import csv, math, pathlib
+import csv, math, pathlib, re
 from string import Template
 
 import mujoco
@@ -21,6 +21,9 @@ def _n(comp, col):
 
 L1 = _n("upper_arm", "length_mm") / 1000  # swivel -> lower_arm (m)
 L2 = _n("lower_arm", "length_mm") / 1000  # lower_arm -> head mount (m)
+M1 = _n("upper_arm", "mass_kg")  # upper arm mass (kg)
+M2 = _n("lower_arm", "mass_kg")  # lower arm mass (kg)
+HEAD_MASS = _n("head", "mass_kg")  # head mass (kg)
 
 # joint limits in deg; eye is not in the freeze
 LIMITS_DEG = {
@@ -51,3 +54,28 @@ def xml(name="glados.xml") -> str:
 def load_model(name="glados.xml") -> mujoco.MjModel:
     meshes = {f.name: f.read_bytes() for f in (_HERE / "assets").rglob("*.obj")}
     return mujoco.MjModel.from_xml_string(xml(name), meshes)
+
+
+# Ideal torque actuators for static holding-torque validation: identical joints/geoms/
+# masses, but the dcmotor voltage actuators are swapped for unlimited torque motors.
+_TORQUE_ACTUATORS = """\
+  <actuator>
+    <motor name="upper_arm_yaw_motor"   joint="upper_arm_yaw_joint"   ctrllimited="false"/>
+    <motor name="upper_arm_pitch_motor" joint="upper_arm_pitch_joint" ctrllimited="false"/>
+    <motor name="lower_arm_motor"       joint="lower_arm_joint"       ctrllimited="false"/>
+    <position name="tilt_actuator" joint="tilt_joint" kp="1000" ctrlrange="-0.6 0.6"/>
+    <position name="nod_actuator"  joint="nod_joint"  kp="1000" ctrlrange="-0.6 0.6"/>
+    <position name="eye_actuator" joint="eye_joint" kp="200" ctrlrange="-0.002 0.002"/>
+  </actuator>"""
+
+
+def torque_xml(name="glados.xml") -> str:
+    """Same model as xml(), but with infinite-torque motor actuators instead of dcmotors."""
+    base = Template((_HERE / "model" / name).read_text()).substitute(_vars())
+    return re.sub(r"<actuator>.*?</actuator>", _TORQUE_ACTUATORS, base, flags=re.S)
+
+
+def load_torque_model(name="glados.xml") -> mujoco.MjModel:
+    """Load the model with ideal (unlimited) torque actuators at every joint."""
+    meshes = {f.name: f.read_bytes() for f in (_HERE / "assets").rglob("*.obj")}
+    return mujoco.MjModel.from_xml_string(torque_xml(name), meshes)
