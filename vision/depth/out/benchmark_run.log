@@ -1,0 +1,65 @@
+[2026-10-24 15:56:17 UTC][ZED][INFO] Logging level INFO
+[2026-10-24 15:56:19 UTC][ZED][INFO] [Init]  Camera successfully opened.
+[2026-10-24 15:56:19 UTC][ZED][INFO] [Init]  Camera FW version: 1523
+[2026-10-24 15:56:19 UTC][ZED][INFO] [Init]  Video mode: HD720@60
+[2026-10-24 15:56:19 UTC][ZED][INFO] [Init]  Serial Number: S/N 14889798
+[2026-10-24 15:56:19 UTC][ZED][WARNING] [Init]  PERFORMANCE is deprecated. Please update your configuration to use NEURAL instead.
+[2026-10-24 15:56:33 UTC][ZED][INFO] Logging level INFO
+[2026-10-24 15:56:35 UTC][ZED][INFO] [Init]  Camera successfully opened.
+[2026-10-24 15:56:35 UTC][ZED][INFO] [Init]  Camera FW version: 1523
+[2026-10-24 15:56:35 UTC][ZED][INFO] [Init]  Video mode: HD720@60
+[2026-10-24 15:56:35 UTC][ZED][INFO] [Init]  Serial Number: S/N 14889798
+[2026-10-24 15:56:35 UTC][ZED][WARNING] [Init]  QUALITY is deprecated. Please update your configuration to use NEURAL instead.
+NvMapMemAllocInternalTagged: 1075072515 error 12
+NvMapMemHandleAlloc: error 0
+NvMapMemAllocInternalTagged: 1075072515 error 12
+NvMapMemHandleAlloc: error 0
+Error Alloc Depth initMemory: 1 
+[2026-10-24 15:56:35 UTC][ZED][ERROR] [Init]  CUDA error out of memory occurred while allocating GPU memory. Please verify that enough GPU memory is available.
+[2026-10-24 15:56:35 UTC][ZED][ERROR] NOT ENOUGH GPU MEMORY in sl::ERROR_CODE sl::Camera::open(sl::InitParameters)
+[2026-10-24 15:56:38 UTC][ZED][INFO] Logging level INFO
+[2026-10-24 15:56:39 UTC][ZED][INFO] [Init]  Camera successfully opened.
+[2026-10-24 15:56:39 UTC][ZED][INFO] [Init]  Camera FW version: 1523
+[2026-10-24 15:56:39 UTC][ZED][INFO] [Init]  Video mode: HD720@60
+[2026-10-24 15:56:39 UTC][ZED][INFO] [Init]  Serial Number: S/N 14889798
+[2026-10-24 15:56:39 UTC][ZED][WARNING] [Init]  ULTRA is deprecated. Please update your configuration to use NEURAL instead.
+NvMapMemAllocInternalTagged: 1075072515 error 12
+NvMapMemHandleAlloc: error 0
+[2026-10-24 15:56:54 UTC][ZED][INFO] Logging level INFO
+[2026-10-24 15:56:56 UTC][ZED][INFO] [Init]  Camera successfully opened.
+[2026-10-24 15:56:56 UTC][ZED][INFO] [Init]  Camera FW version: 1523
+[2026-10-24 15:56:56 UTC][ZED][INFO] [Init]  Video mode: HD720@60
+[2026-10-24 15:56:56 UTC][ZED][INFO] [Init]  Serial Number: S/N 14889798
+[2026-10-24 15:56:56 UTC][ZED][INFO] [Init]  Depth mode selected: NEURAL LIGHT. Ensure this mode matches your application's performance and accuracy requirements. See https://www.stereolabs.com/docs/depth-sensing/depth-modes for help.
+[2026-10-24 15:57:11 UTC][ZED][INFO] Logging level INFO
+[2026-10-24 15:57:12 UTC][ZED][INFO] [Init]  Camera successfully opened.
+[2026-10-24 15:57:12 UTC][ZED][INFO] [Init]  Camera FW version: 1523
+[2026-10-24 15:57:12 UTC][ZED][INFO] [Init]  Video mode: HD720@60
+[2026-10-24 15:57:12 UTC][ZED][INFO] [Init]  Serial Number: S/N 14889798
+[2026-10-24 15:57:12 UTC][ZED][INFO] [Init]  Depth mode selected: NEURAL. Ensure this mode matches your application's performance and accuracy requirements. See https://www.stereolabs.com/docs/depth-sensing/depth-modes for help.
+[2026-10-24 15:57:27 UTC][ZED][INFO] Logging level INFO
+[2026-10-24 15:57:28 UTC][ZED][INFO] [Init]  Camera successfully opened.
+[2026-10-24 15:57:28 UTC][ZED][INFO] [Init]  Camera FW version: 1523
+[2026-10-24 15:57:28 UTC][ZED][INFO] [Init]  Video mode: HD720@60
+[2026-10-24 15:57:28 UTC][ZED][INFO] [Init]  Serial Number: S/N 14889798
+[2026-10-24 15:57:28 UTC][ZED][INFO] [Init]  Depth mode selected: NEURAL PLUS. Ensure this mode matches your application's performance and accuracy requirements. See https://www.stereolabs.com/docs/depth-sensing/depth-modes for help.
+[bench] 6 modes, 10.0s each at HD720@60 (load 6.35, 1.65 GB free)
+[bench] keep the scene still — centre ± is frame-to-frame jitter
+
+  PERFORMANCE  open   3.5s |  57.3 FPS | grab 15.0 ms (p95 19.9) | fill 96.6% | centre 3.070 m ± 5.1 mm
+  QUALITY: ZED open failed (QUALITY): NOT ENOUGH GPU MEMORY
+  ULTRA        open   3.7s |  56.9 FPS | grab 15.7 ms (p95 27.6) | fill 96.1% | centre 3.019 m ± 12.5 mm
+  NEURAL_LIGHT open   3.8s |  60.1 FPS | grab 14.8 ms (p95 22.3) | fill 99.5% | centre 3.023 m ± 1.7 mm
+  NEURAL       open   3.4s |  40.2 FPS | grab 20.7 ms (p95 34.6) | fill 99.4% | centre 3.010 m ± 2.5 mm
+  NEURAL_PLUS  open   3.0s |  10.3 FPS | grab 94.5 ms (p95 170.2) | fill 99.1% | centre 3.049 m ± 2.2 mm
+
+| mode | open (s) | FPS | grab ms (mean / p95) | fill % | centre (m) | centre ± (mm) |
+|---|---|---|---|---|---|---|
+| PERFORMANCE | 3.5 | 57.3 | 15.0 / 19.9 | 96.6 | 3.070 | 5.1 |
+| QUALITY | failed | — | — | — | — | — |
+| ULTRA | 3.7 | 56.9 | 15.7 / 27.6 | 96.1 | 3.019 | 12.5 |
+| NEURAL_LIGHT | 3.8 | 60.1 | 14.8 / 22.3 | 99.5 | 3.023 | 1.7 |
+| NEURAL | 3.4 | 40.2 | 20.7 / 34.6 | 99.4 | 3.010 | 2.5 |
+| NEURAL_PLUS | 3.0 | 10.3 | 94.5 / 170.2 | 99.1 | 3.049 | 2.2 |
+
+[bench] wrote /home/jetson-nano-x1/Documents/GLaDOS-vision/vision/depth/out/depth_benchmark_20261024_155745.json

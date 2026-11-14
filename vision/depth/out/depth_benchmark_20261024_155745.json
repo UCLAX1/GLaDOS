@@ -1,0 +1,93 @@
+{
+  "info": {
+    "sdk": "5.2.0",
+    "resolution": "HD720",
+    "camera_fps": 60,
+    "seconds": 10.0,
+    "svo": null,
+    "loadavg_1m": 6.35,
+    "mem_avail_gb": 1.65,
+    "time": "2026-10-24 15:56:17"
+  },
+  "results": [
+    {
+      "mode": "PERFORMANCE",
+      "open_s": 3.5,
+      "fps": 57.3,
+      "grab_ms_mean": 15.0,
+      "grab_ms_p95": 19.9,
+      "retrieve_ms": 10.0,
+      "fill_pct": 96.6,
+      "centre_m": 3.07,
+      "centre_std_mm": 5.1,
+      "snapshots": [
+        "/home/jetson-nano-x1/Documents/GLaDOS-vision/vision/depth/out/bench_PERFORMANCE_left.png",
+        "/home/jetson-nano-x1/Documents/GLaDOS-vision/vision/depth/out/bench_PERFORMANCE_depth.png"
+      ]
+    },
+    {
+      "mode": "QUALITY",
+      "error": "ZED open failed (QUALITY): NOT ENOUGH GPU MEMORY"
+    },
+    {
+      "mode": "ULTRA",
+      "open_s": 3.7,
+      "fps": 56.9,
+      "grab_ms_mean": 15.7,
+      "grab_ms_p95": 27.6,
+      "retrieve_ms": 7.4,
+      "fill_pct": 96.1,
+      "centre_m": 3.019,
+      "centre_std_mm": 12.5,
+      "snapshots": [
+        "/home/jetson-nano-x1/Documents/GLaDOS-vision/vision/depth/out/bench_ULTRA_left.png",
+        "/home/jetson-nano-x1/Documents/GLaDOS-vision/vision/depth/out/bench_ULTRA_depth.png"
+      ]
+    },
+    {
+      "mode": "NEURAL_LIGHT",
+      "open_s": 3.8,
+      "fps": 60.1,
+      "grab_ms_mean": 14.8,
+      "grab_ms_p95": 22.3,
+      "retrieve_ms": 6.7,
+      "fill_pct": 99.5,
+      "centre_m": 3.023,
+      "centre_std_mm": 1.7,
+      "snapshots": [
+        "/home/jetson-nano-x1/Documents/GLaDOS-vision/vision/depth/out/bench_NEURAL_LIGHT_left.png",
+        "/home/jetson-nano-x1/Documents/GLaDOS-vision/vision/depth/out/bench_NEURAL_LIGHT_depth.png"
+      ]
+    },
+    {
+      "mode": "NEURAL",
+      "open_s": 3.4,
+      "fps": 40.2,
+      "grab_ms_mean": 20.7,
+      "grab_ms_p95": 34.6,
+      "retrieve_ms": 17.6,
+      "fill_pct": 99.4,
+      "centre_m": 3.01,
+      "centre_std_mm": 2.5,
+      "snapshots": [
+        "/home/jetson-nano-x1/Documents/GLaDOS-vision/vision/depth/out/bench_NEURAL_left.png",
+        "/home/jetson-nano-x1/Documents/GLaDOS-vision/vision/depth/out/bench_NEURAL_depth.png"
+      ]
+    },
+    {
+      "mode": "NEURAL_PLUS",
+      "open_s": 3.0,
+      "fps": 10.3,
+      "grab_ms_mean": 94.5,
+      "grab_ms_p95": 170.2,
+      "retrieve_ms": 11.6,
+      "fill_pct": 99.1,
+      "centre_m": 3.049,
+      "centre_std_mm": 2.2,
+      "snapshots": [
+        "/home/jetson-nano-x1/Documents/GLaDOS-vision/vision/depth/out/bench_NEURAL_PLUS_left.png",
+        "/home/jetson-nano-x1/Documents/GLaDOS-vision/vision/depth/out/bench_NEURAL_PLUS_depth.png"
+      ]
+    }
+  ]
+}

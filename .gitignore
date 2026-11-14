@@ -110,3 +110,7 @@ test*.wav
 
 #sim
 videos/
+# vision demo: venv and downloaded model weights
+vision/demo/.venv/
+vision/demo/models/
+vision/face_detector.tflite

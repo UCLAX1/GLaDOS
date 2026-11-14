@@ -21,6 +21,13 @@ import threading
 
 MODULES = [
     {
+        "id":    "all",
+        "label": "All Modules (PDR demo)",
+        "desc":  "Tracking + gestures + faces + expression + depth on one camera",
+        "file":  "vision/demo/run_demo.py",
+        "key":   "D",
+    },
+    {
         "id":    "face_memory",
         "label": "Face Recognition",
         "desc":  "Identify people via InsightFace embeddings",

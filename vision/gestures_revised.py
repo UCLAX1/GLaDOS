@@ -66,12 +66,6 @@ class LatestFrame:
         self.cap.release()
 
 
-cap = cv2.VideoCapture(0)
-# LOCAL TEST: ZED Mini gives both lenses side by side; ask for 2x 1280x720
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 2560)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-cap = LatestFrame(cap)  # LOCAL TEST
-frame_times = deque(maxlen=30)  # LOCAL TEST: for the FPS counter
 
 # LOCAL TEST: both arms, each with its own wrist history (was right arm only)
 ARMS = {
@@ -650,78 +644,86 @@ def detect_arm_gestures(landmarks, hand_results):
     return arm_gestures
 
 
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        break
-    frame = frame[:, :frame.shape[1] // 2]  # LOCAL TEST: left lens only
-    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    hands_future = hands_pool.submit(hands.process, rgb_frame)  # LOCAL TEST: parallel
-    pose_results = pose.process(rgb_frame)
-    hand_results = hands_future.result()
-    gesture = "none"
+if __name__ == "__main__":  # importable by vision/demo
+    cap = cv2.VideoCapture(0)
+    # LOCAL TEST: ZED Mini gives both lenses side by side; ask for 2x 1280x720
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 2560)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    cap = LatestFrame(cap)  # LOCAL TEST
+    frame_times = deque(maxlen=30)  # LOCAL TEST: for the FPS counter
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        if frame.shape[1] > 3 * frame.shape[0]:  # ZED side-by-side stereo: keep the left lens
+            frame = frame[:, :frame.shape[1] // 2]
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        hands_future = hands_pool.submit(hands.process, rgb_frame)  # LOCAL TEST: parallel
+        pose_results = pose.process(rgb_frame)
+        hand_results = hands_future.result()
+        gesture = "none"
 
 
 
-    # body gestures
-    if pose_results.pose_landmarks:
-        landmarks = pose_results.pose_landmarks.landmark
+        # body gestures
+        if pose_results.pose_landmarks:
+            landmarks = pose_results.pose_landmarks.landmark
 
-        mp_drawing.draw_landmarks(
-            frame,
-            pose_results.pose_landmarks,
-            mp_pose.POSE_CONNECTIONS
-        )
-
-        arm_gestures = detect_arm_gestures(landmarks, hand_results)  # LOCAL TEST
-        if arm_gestures:
-            gesture = " | ".join(arm_gestures)
-
-        # LOCAL TEST: draw every hand, not only ones making a hand gesture
-        for hand_landmarks in hand_results.multi_hand_landmarks or []:
             mp_drawing.draw_landmarks(
                 frame,
-                hand_landmarks,
-                mp_hands.HAND_CONNECTIONS
+                pose_results.pose_landmarks,
+                mp_pose.POSE_CONNECTIONS
             )
-    else:
-        clear_wrist_history()  # LOCAL TEST: person left the frame
+
+            arm_gestures = detect_arm_gestures(landmarks, hand_results)  # LOCAL TEST
+            if arm_gestures:
+                gesture = " | ".join(arm_gestures)
+
+            # LOCAL TEST: draw every hand, not only ones making a hand gesture
+            for hand_landmarks in hand_results.multi_hand_landmarks or []:
+                mp_drawing.draw_landmarks(
+                    frame,
+                    hand_landmarks,
+                    mp_hands.HAND_CONNECTIONS
+                )
+        else:
+            clear_wrist_history()  # LOCAL TEST: person left the frame
 
 
 
 
 
 
-    cv2.putText(
-        frame,
-        f"Gesture: {gesture}",
-        (30, 50),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        1,
-        (0, 255, 0),
-        2
-    )
-    # LOCAL TEST: the original call had no text argument and raised on every
-    # frame; it now shows the processing FPS instead
-    frame_times.append(time.time())
-    fps = (len(frame_times) - 1) / (frame_times[-1] - frame_times[0]) if len(frame_times) > 1 else 0.0
-    cv2.putText(
-        frame,
-        f"FPS: {fps:.1f}",
-        (30, 90),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        1,
-        (0, 255, 0),
-        2
-    )
+        cv2.putText(
+            frame,
+            f"Gesture: {gesture}",
+            (30, 50),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1,
+            (0, 255, 0),
+            2
+        )
+        # LOCAL TEST: the original call had no text argument and raised on every
+        # frame; it now shows the processing FPS instead
+        frame_times.append(time.time())
+        fps = (len(frame_times) - 1) / (frame_times[-1] - frame_times[0]) if len(frame_times) > 1 else 0.0
+        cv2.putText(
+            frame,
+            f"FPS: {fps:.1f}",
+            (30, 90),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1,
+            (0, 255, 0),
+            2
+        )
 
-    cv2.imshow("Glados Gesture Test", frame)
+        cv2.imshow("Glados Gesture Test", frame)
 
-    if cv2.waitKey(1) & 0xFF == ord("q"):
-        break
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            break
 
-cap.release()
-hands_pool.shutdown()  # LOCAL TEST
-pose.close()
-hands.close()
-cv2.destroyAllWindows()
+    cap.release()
+    hands_pool.shutdown()  # LOCAL TEST
+    pose.close()
+    hands.close()
+    cv2.destroyAllWindows()

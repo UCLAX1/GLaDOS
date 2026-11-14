@@ -5,7 +5,7 @@ import os
 import re
 from insightface.app import FaceAnalysis
 
-FACES_DIR = "vision/known_faces"
+FACES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "known_faces")
 os.makedirs(FACES_DIR, exist_ok=True)
 
 # Use buffalo_l for a larger model, buffalo_s for a smaller model
@@ -146,63 +146,64 @@ def recognize_person(frame, threshold=THRESHOLD):
     return results
 
 
-# Open webcam
-cap = cv2.VideoCapture(0)
+if __name__ == "__main__":  # importable by vision/demo
+    # Open webcam
+    cap = cv2.VideoCapture(0)
 
-if not cap.isOpened():
-    raise RuntimeError("Could not open webcam.")
+    if not cap.isOpened():
+        raise RuntimeError("Could not open webcam.")
 
-print("Press R to register a person")
-print("Press Q to quit")
+    print("Press R to register a person")
+    print("Press Q to quit")
 
-while True:
-    ret, frame = cap.read()
+    while True:
+        ret, frame = cap.read()
 
-    if not ret:
-        break
+        if not ret:
+            break
 
-    # Recognize every face in the frame
-    results = recognize_person(frame)
+        # Recognize every face in the frame
+        results = recognize_person(frame)
 
-    for name, bbox, score in results:
-        x1, y1, x2, y2 = bbox
+        for name, bbox, score in results:
+            x1, y1, x2, y2 = bbox
 
-        color = (
-            (0, 255, 0)
-            if name != "unknown"
-            else (0, 165, 255)
-        )
+            color = (
+                (0, 255, 0)
+                if name != "unknown"
+                else (0, 165, 255)
+            )
 
-        cv2.rectangle(
-            frame,
-            (x1, y1),
-            (x2, y2),
-            color,
-            2
-        )
+            cv2.rectangle(
+                frame,
+                (x1, y1),
+                (x2, y2),
+                color,
+                2
+            )
 
-        label = f"{name} ({score:.2f})"
+            label = f"{name} ({score:.2f})"
 
-        cv2.putText(
-            frame,
-            label,
-            (x1, max(y1 - 10, 20)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            color,
-            2
-        )
+            cv2.putText(
+                frame,
+                label,
+                (x1, max(y1 - 10, 20)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                color,
+                2
+            )
 
-    cv2.imshow("GLaDOS Face Recognition", frame)
+        cv2.imshow("GLaDOS Face Recognition", frame)
 
-    key = cv2.waitKey(1) & 0xFF
+        key = cv2.waitKey(1) & 0xFF
 
-    if key == ord("r"):
-        name = input("Enter name: ")
-        register_person(name, cap)
+        if key == ord("r"):
+            name = input("Enter name: ")
+            register_person(name, cap)
 
-    elif key == ord("q"):
-        break
+        elif key == ord("q"):
+            break
 
-cap.release()
-cv2.destroyAllWindows()
+    cap.release()
+    cv2.destroyAllWindows()
