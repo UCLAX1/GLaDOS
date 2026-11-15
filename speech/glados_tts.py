@@ -126,7 +126,8 @@ class GladosTTS:
 
         # torch.compile gives ~20-40% speedup after the first inference
         # (disabled on MPS — not yet fully supported)
-        if self.device != "mps":
+        import sys
+        if self.device != "mps" and sys.platform != "win32":   # Windows: needs MSVC, skip
             try:
                 self.kmodel = torch.compile(self.kmodel)
             except Exception:

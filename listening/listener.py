@@ -62,6 +62,12 @@ class SpeechListener:
     on_realtime : callable(str) or None
         Called with in-progress text while the user is still speaking.
         Uses a lighter model; accuracy is lower than final transcription.
+    on_speculative : callable(str) or None
+        Called with the transcript as soon as a pause has been transcribed,
+        before the endpoint is confirmed. Followed by either
+        on_transcription(same text) or on_speculation_cancelled().
+    on_speculation_cancelled : callable() or None
+        The speaker resumed after a pause — the speculative transcript is stale.
     model_final : str
         faster-whisper model for final transcription. Default distil-large-v3.
     model_realtime : str
@@ -90,6 +96,8 @@ class SpeechListener:
         self,
         on_transcription,
         on_realtime=None,
+        on_speculative=None,
+        on_speculation_cancelled=None,
         model_final="distil-large-v3",
         model_realtime="distil-small.en",
         language="en",
@@ -101,6 +109,13 @@ class SpeechListener:
     ):
         self._on_transcription = on_transcription
         self._on_realtime      = on_realtime
+        # Early-start hooks: on_speculative(text) fires as soon as a pause has
+        # been transcribed (≈spec_chunks after the last word) — before the full
+        # gap confirms the utterance is over. If the speaker carries on,
+        # on_speculation_cancelled() fires; otherwise on_transcription(text)
+        # follows with the same text. Lets the LLM start inside the VAD gap.
+        self._on_speculative   = on_speculative
+        self._on_spec_cancel   = on_speculation_cancelled
         self._language         = language
         self._threshold        = speech_threshold
         self._gap_chunks       = gap_chunks
@@ -119,9 +134,20 @@ class SpeechListener:
         self._vad = load_silero_vad()
 
         print(f"[listener] loading transcriber ({model_final}) ...")
-        self._transcriber = WhisperModel(
-            model_final, device=device, compute_type=compute_type
-        )
+        try:
+            self._transcriber = WhisperModel(
+                model_final, device=device, compute_type=compute_type
+            )
+        except Exception as e:
+            if device == "cpu":
+                raise
+            # Typical on Windows: CUDA is there but cuDNN/cuBLAS for CTranslate2 is not.
+            print(f"[listener] {device} transcriber failed ({e}) — using CPU")
+            device, compute_type = "cpu", "int8"
+            self._device = device
+            self._transcriber = WhisperModel(
+                model_final, device=device, compute_type=compute_type
+            )
 
         self._realtime_model = None
         if on_realtime:
@@ -162,6 +188,8 @@ class SpeechListener:
             audio,
             language=self._language,
             condition_on_previous_text=False,
+            beam_size=1,                 # greedy: ~2x faster than the default beam of 5
+            without_timestamps=True,
         )
         return "".join(s.text for s in segments)
 
@@ -183,6 +211,12 @@ class SpeechListener:
                 spec_text  = _preprocess(self._transcribe(chunks))
                 spec_stt   = time.time() - t0
                 spec_epoch = epoch
+                # Still current (speaker has not resumed)? Let the pipeline start early.
+                if spec_text and self._on_speculative and epoch == self._epoch:
+                    try:
+                        self._on_speculative(spec_text)
+                    except Exception as e:
+                        print(f"[listener] on_speculative raised: {e!r}")
                 continue
 
             t_pickup = time.time()
@@ -259,6 +293,11 @@ class SpeechListener:
                 if self._gap_count:
                     # Resumed mid-pause: anything already speculated is stale.
                     self._epoch += 1
+                    if self._spec_sent and self._on_spec_cancel:
+                        try:
+                            self._on_spec_cancel()
+                        except Exception as e:
+                            print(f"[listener] on_speculation_cancelled raised: {e!r}")
                     self._spec_sent = False
                 self._gap_count = 0
             else:

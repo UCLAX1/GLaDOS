@@ -2,8 +2,10 @@
 """
 vision_client.py — Mac-side perception client for X1 GLaDOS.
 
-Polls the Jetson's vision_server.py at ~5 Hz in a background thread and
-exposes the latest perception state to the rest of the pipeline.
+Polls the Jetson's vision demo (vision/demo/run_demo.py, GET :8081/status) at
+~5 Hz in a background thread and exposes what it sees to the rest of the
+pipeline. The demo owns the camera and already fuses tracking, faces,
+expressions, gestures and depth, so there is no separate perception server.
 
 Usage:
     from vision.vision_client import VisionClient
@@ -12,8 +14,7 @@ Usage:
     client.start()
 
     # anywhere in the pipeline:
-    ctx = client.context_string()
-    # e.g. "Gestures: right: waving | Faces in view: 1 | Nearest person: 1.2 m"
+    client.snapshot()   # {"people": [{"name": ..., "expression": ..., "gestures": [...], "distance": ...}]}
 
     client.stop()
 
@@ -21,7 +22,7 @@ If the Jetson is unreachable the client silently returns empty context — the
 pipeline degrades gracefully rather than crashing.
 
 Set env var JETSON_IP to skip passing the IP explicitly:
-    JETSON_IP=100.73.92.3 python3 launch.py
+    JETSON_IP=100.73.92.3 ./start.sh
 """
 
 import os
@@ -43,9 +44,9 @@ class VisionClient:
     Parameters
     ----------
     jetson_ip : str
-        IP or hostname of the Jetson running vision_server.py.
-    port : int
-        Port the server listens on (default 5555).
+        IP or hostname of the Jetson running the vision demo.
+    port : int or None
+        Port of the demo's web server (default: $VISION_DEMO_PORT or 8081).
     poll_hz : float
         How often to poll (default 5 Hz — plenty for gesture context).
     timeout : float
@@ -55,18 +56,15 @@ class VisionClient:
     def __init__(
         self,
         jetson_ip: Optional[str] = None,
-        port: int = 5555,
+        port: Optional[int] = None,
         poll_hz: float = 5.0,
         timeout: float = 1.0,
     ):
         self._ip      = jetson_ip or os.environ.get("JETSON_IP", "")
-        # Primary source: the vision demo (run_demo.py), which owns the ZED and
-        # already fuses tracks, faces, expressions, gestures and depth at /status.
-        demo_port      = int(os.environ.get("VISION_DEMO_PORT", "8081"))
+        demo_port      = int(port or os.environ.get("VISION_DEMO_PORT", "8081"))
         self._demo_url = f"http://{self._ip}:{demo_port}/status" if self._ip else ""
-        # Fallback: standalone vision_server.py (only useful if the demo isn't running).
-        self._url      = f"http://{self._ip}:{port}/perception" if self._ip else ""
-        self.source    = ""   # "demo" or "server" — whichever answered last
+        self._url      = self._demo_url
+        self.source    = ""   # "demo" once the Jetson has answered
         self.last_ok_t = 0.0  # time of last successful poll
         self.last_error = ""  # most recent poll error (for the GUI)
         self._interval = 1.0 / poll_hz
@@ -93,7 +91,7 @@ class VisionClient:
         self._running = True
         self._thread  = threading.Thread(target=self._poll_loop, daemon=True, name="VisionClient")
         self._thread.start()
-        print(f"[vision_client] polling {self._demo_url} (fallback {self._url}) "
+        print(f"[vision_client] polling {self._demo_url} "
               f"at {1 / self._interval:.0f} Hz")
 
     def stop(self):
@@ -197,30 +195,14 @@ class VisionClient:
         }
 
     def _fetch(self) -> dict:
-        """Try the demo first, then the standalone server."""
-        try:
-            r = _requests.get(self._demo_url, timeout=self._timeout)
-            r.raise_for_status()
-            self.source = "demo"
-            raw = r.json()
-            self.system = raw.get("system") or {}
-            with self._lock:
-                self._raw = {
-                    "people": raw.get("people", []),   # id, name, expr, gestures, dist
-                    "camera": raw.get("camera", {}),
-                }
-            return self._from_demo(raw)
-        except Exception as demo_err:
-            try:
-                r = _requests.get(self._url, timeout=self._timeout)
-                r.raise_for_status()
-                self.source = "server"
-                raw = r.json()
-                with self._lock:
-                    self._raw = raw
-                return raw
-            except Exception:
-                raise demo_err
+        r = _requests.get(self._demo_url, timeout=self._timeout)
+        r.raise_for_status()
+        self.source = "demo"
+        raw = r.json()
+        self.system = raw.get("system") or {}
+        with self._lock:
+            self._raw = {"people": raw.get("people", [])}   # id, name, expr, gestures, dist
+        return self._from_demo(raw)
 
     def _poll_loop(self):
         consecutive_errors = 0

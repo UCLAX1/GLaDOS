@@ -24,6 +24,13 @@ import threading
 import time
 import urllib.request
 
+# Windows consoles default to a legacy code page that cannot print ✓ / ⏱ / —
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 import mujoco
 import numpy as np
 from PIL import Image
@@ -37,11 +44,12 @@ from PySide6.QtWidgets import (
 )
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from central_ai.brain import GladosBrain, build_turn
+from central_ai.brain import GladosBrain
+from pipeline import TurnManager
 import json
 from control.mujoco_control import MujocoControl
 from actions.sequence import Sequence, TICK_RATE
-from speech.speech_queue import enqueue, clear as clear_tts_queue
+from speech.speech_queue import enqueue, clear as clear_tts_queue, QUEUE_DIR as SPEECH_QUEUE_DIR
 from listening.listener import SpeechListener
 from vision.vision_client import VisionClient
 
@@ -52,8 +60,28 @@ GGUF      = ROOT / "central_ai/benchmarking_tools/Bonsai-8B-Q1_0.gguf"
 MODEL_XML = ROOT / "sim/model/glados.xml"
 sys.path.insert(0, str(ROOT / "sim"))
 HARDWARE   = bool(os.environ.get("GLADOS_HARDWARE"))
-LLAMA_CMD  = "llama-server"
+def _find_llama() -> str:
+    """llama-server from PATH, else the copy setup put in tools/llama/ (Windows)."""
+    import shutil
+    exe = "llama-server.exe" if os.name == "nt" else "llama-server"
+    found = shutil.which("llama-server")
+    if found:
+        return found
+    for p in sorted((ROOT / "tools" / "llama").rglob(exe)):
+        return str(p)
+    return exe
+
+LLAMA_CMD  = os.environ.get("LLAMA_SERVER") or _find_llama()
+MONO       = {"darwin": "Menlo", "win32": "Consolas"}.get(sys.platform, "DejaVu Sans Mono")
+HOST_LABEL = {"darwin": "MAC", "win32": "PC"}.get(sys.platform, "HOST")
 JETSON_IP  = os.environ.get("JETSON_IP", "")
+if JETSON_IP.strip().lower() in ("none", "off", "0"):      # explicit "no vision"
+    JETSON_IP = ""
+    os.environ["JETSON_IP"] = ""
+# Silence needed before an utterance counts as finished. Shorter = snappier; a
+# pause that turns out not to be the end is handled by the pipeline (the two
+# halves are merged retroactively), so this can be well under the old 640 ms.
+GAP_MS     = int(os.environ.get("GLADOS_GAP_MS", "480"))
 
 SIM_W, SIM_H = 640, 480
 FPS = 30
@@ -95,26 +123,17 @@ cam.elevation = -20.0
 import collections as _collections
 
 brain        = GladosBrain()
-brain_lock   = threading.Lock()
 vision       = VisionClient(JETSON_IP or None)   # polls Jetson; no-op if JETSON_IP unset
-# Input turns: FIFO (oldest first). A deque + condition instead of
-# Queue(maxsize=1), which silently dropped older inputs ("latest wins").
-_turn_q   = _collections.deque()
-_turn_cv  = threading.Condition()
-_cancel_gen = 0          # bumped on interrupt; in-flight replies with an older gen stop
 _gesture_q:   queue.Queue = queue.Queue(maxsize=1)
-_tts_queue   = _collections.deque()   # local mirror of sentences awaiting TTS
-_last_unspoken: list[str] = []        # sentences queued but not yet played at interrupt time
-_currently_speaking = threading.Event()  # set while audio is playing
-auto_interrupt = threading.Event()    # toggleable: interrupt on barge-in
-auto_interrupt.set()                  # on by default
 _muted    = threading.Event()   # mute: block TTS output
-_deafened = threading.Event()   # deafen: ignore mic input
 _admin_console: "AdminConsole | None" = None  # set after window creation
+_signals: "Signals | None" = None             # set in main(); pipeline events → Qt signals
 procs: list[subprocess.Popen] = []
 listener: "SpeechListener | None" = None   # set in main(); used by shutdown()
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
+# All turn logic (FIFO, early start, retroactive merge, barge-in, cancel) lives
+# in pipeline.TurnManager. This file only wires it to Qt, the sim and the mic.
 
 def dispatch_speech(text: str):
     if not _muted.is_set():
@@ -129,17 +148,6 @@ def dispatch_gesture(gesture: str):
     except queue.Empty:
         pass
     _gesture_q.put_nowait(action)
-
-def _interrupt_speech(signals):
-    """Clear the TTS queue and record what was left unspoken."""
-    global _last_unspoken, _cancel_gen
-    _cancel_gen += 1    # stop the reply that is still being generated
-    # Save whatever was still pending (hasn't started playing)
-    _last_unspoken = list(_tts_queue)
-    _tts_queue.clear()
-    clear_tts_queue()   # delete filesystem queue files
-    signals.pipe_queue.emit([])
-    signals.pipe_speak.emit("—")
 
 # Admin "next-turn inject" — plain Python state, written by the GUI thread,
 # read by the brain thread. (Never touch Qt widgets from the brain thread.)
@@ -159,103 +167,76 @@ def _take_inject() -> str:
         return text
 
 
-def submit_turn(signals, heard: str = "", event: str = "speech", from_mic: bool = False):
-    """
-    Single entry point for every input: mic, admin text, vision events, the
-    'input visuals' button. The brain loop merges it with the live vision
-    snapshot into ONE JSON message.
-    """
-    heard = (heard or "").strip()
-    if event == "speech":
-        if not heard or (from_mic and _deafened.is_set()):
-            return
-        # Barge-in only applies to real speech
-        if (_currently_speaking.is_set() or _tts_queue) and auto_interrupt.is_set():
-            _interrupt_speech(signals)
-
-    turn = {"heard": heard, "event": event}
-    with _turn_cv:
-        if event != "speech":
-            # Camera events only matter "now": skip if anything is already waiting
-            if _turn_q:
-                return
-        else:
-            # Speech outranks stale camera events that haven't been handled yet
-            for t in [t for t in _turn_q if t["event"] != "speech"]:
-                _turn_q.remove(t)
-        _turn_q.append(turn)            # FIFO: oldest is handled first
-        _turn_cv.notify()
-    signals.status.emit("thinking")
+def _log(line: str):
+    if _admin_console is not None:
+        _admin_console.push_log(line)
 
 
-def on_transcription(text: str, signals):
-    """SpeechListener callback."""
-    submit_turn(signals, heard=text, event="speech", from_mic=True)
+def _pipeline_event(name: str, **kw):
+    """TurnManager → Qt. Called from worker threads; signals are thread-safe."""
+    s = _signals
+    if s is None:
+        return
+    if name == "input":
+        s.pipe_input.emit(kw["json"])
+        _log(f"[turn] {kw['json']}")
+    elif name == "chunk":
+        s.pipe_brain.emit(kw["text"])
+    elif name == "queue":
+        s.pipe_queue.emit(kw["items"])
+    elif name == "speaking":
+        s.pipe_speak.emit(kw["text"] or "—")
+    elif name == "spoke_done":
+        s.pipe_done.emit()
+    elif name == "silent":
+        s.pipe_brain.emit("(silent)")
+        _log(f"[brain] stayed silent — raw: {kw.get('raw')}")
+    elif name == "status":
+        s.status.emit(kw["stage"])
+    elif name == "gesture":
+        dispatch_gesture(kw["gesture"])
+    elif name == "latency":
+        parts = []
+        if kw.get("llm") is not None:
+            parts.append(f"llm {kw['llm']:+.2f}s")
+        if kw.get("tts") is not None:
+            parts.append(f"tts {kw['tts']:.2f}s")
+        if kw.get("speculative"):
+            parts.append("early start")
+        line = f"⏱ {kw['total']:.2f}s to first sound  ({' · '.join(parts)})"
+        s.metrics.emit("latency", line)
+        _log(f"[latency] {line}")
+    elif name == "llm_timing":
+        if kw:
+            fc = kw.get("first_chunk")
+            _log("[llm] first words {} · total {:.2f}s · new prompt tokens {} (cached {}) · {} tok/s".format(
+                f"{fc:.2f}s" if fc is not None else "—", kw.get("total", 0.0),
+                kw.get("prompt_n"), kw.get("cache_n"),
+                f"{kw['tok_s']:.0f}" if kw.get("tok_s") else "?"))
+    elif name == "log":
+        _log(kw["text"])
 
 
-def _brain_loop(signals):
-    global _last_unspoken
-    while True:
-        with _turn_cv:
-            while not _turn_q:
-                _turn_cv.wait()
-            turn = _turn_q.popleft()                     # oldest first
-            if turn["event"] == "speech":
-                # Speech that piled up while she was busy is one continued
-                # thought (VAD splits on pauses) — merge it, in spoken order.
-                parts = [turn["heard"]]
-                while _turn_q and _turn_q[0]["event"] == "speech":
-                    parts.append(_turn_q.popleft()["heard"])
-                turn = {"heard": " ".join(parts), "event": "speech"}
-        my_gen = _cancel_gen
-        t0     = time.time()
+pipeline = TurnManager(
+    brain, vision,
+    speak=dispatch_speech,
+    cancel_speech=clear_tts_queue,
+    on_event=_pipeline_event,
+    get_notes=lambda: [n for n in [_take_inject()] if n],
+)
+auto_interrupt = pipeline.auto_interrupt   # toggled from the GUI
+_deafened      = pipeline.deafened
 
-        # No "you were interrupted" note: at our latency the unfinished line is
-        # stale by the time she replies, and it made her rehash old answers.
-        notes = []
-        inject = _take_inject()
-        if inject:
-            notes.append(inject)
 
-        user_json = build_turn(
-            heard=turn["heard"],
-            vision=vision.snapshot(),
-            event=turn["event"],
-            notes=notes or None,
-        )
-        signals.pipe_input.emit(user_json)
-        if _admin_console is not None:
-            _admin_console.push_log(f"[turn] {user_json}")
-
-        signals.pipe_brain.emit("")          # clear brain box for new turn
-        with brain_lock:
-            first = True
-            for sentence in brain.respond_stream(user_json):
-                if _cancel_gen != my_gen:
-                    # Interrupted: drop the rest of this reply
-                    if _admin_console is not None:
-                        _admin_console.push_log("[brain] reply cancelled by interrupt")
-                    break
-                if not sentence.strip():
-                    continue
-                if first:
-                    signals.status.emit("tts")
-                    first = False
-                dispatch_speech(sentence)
-                _tts_queue.append(sentence)
-                signals.pipe_brain.emit(sentence)
-                signals.pipe_queue.emit(list(_tts_queue))
-        if _cancel_gen != my_gen:
-            signals.timing.emit(time.time() - t0)
-            continue                                       # no gesture for a cancelled reply
-        response = brain.last_response or {}
-        if first:
-            signals.pipe_brain.emit("(silent)")
-            signals.status.emit("listening")
-            if _admin_console is not None:
-                _admin_console.push_log(f"[brain] stayed silent — raw: {response}")
-        dispatch_gesture(response.get("gesture", "idle"))
-        signals.timing.emit(time.time() - t0)
+def on_transcription(text: str):
+    """SpeechListener: a complete utterance."""
+    lt = (listener.last_timing if listener else None) or {}
+    t_voice_end = None
+    if lt.get("t_speech_end"):
+        # t_speech_end is stamped when the silence gap ran out; the human
+        # actually stopped talking one gap earlier.
+        t_voice_end = lt["t_speech_end"] - lt.get("vad_gap", 0.0)
+    pipeline.speech_final(text, t_voice_end=t_voice_end, from_mic=True)
 
 def _gesture_loop(signals):
     def tick(): time.sleep(TICK_RATE)
@@ -280,11 +261,83 @@ def _home_pose():
     Sequence(robot, tick_fn=tick).pose(duration=1.5, lerp=True, **HOME).play()
 
 
+_usage: dict = {}     # latest Mac usage sample, written by _usage_loop
+
+def _sample_usage() -> dict:
+    """CPU / RAM for this machine + RSS of our processes. psutil if present,
+    otherwise plain `ps` / `vm_stat` / `sysctl` (always there on macOS)."""
+    mine = {"gui": os.getpid()}
+    for p in procs:
+        if p.poll() is None:
+            mine["llama" if "llama" in str(p.args[0]) else "tts"] = p.pid
+    out = {"procs": {}}
+    try:
+        import psutil
+        vm = psutil.virtual_memory()
+        out.update(cpu=psutil.cpu_percent(None), ram_used=vm.used / 2**30, ram_total=vm.total / 2**30)
+        for label, pid in mine.items():
+            try:
+                out["procs"][label] = psutil.Process(pid).memory_info().rss / 2**30
+            except psutil.Error:
+                pass
+        return out
+    except ImportError:
+        pass
+
+    def sh(*cmd):
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=3).stdout
+
+    try:
+        cpu = sum(float(x) for x in sh("ps", "-A", "-o", "%cpu=").split())
+        out["cpu"] = min(100.0, cpu / (os.cpu_count() or 1))
+    except Exception:
+        out["cpu"] = None
+    try:
+        if sys.platform == "darwin":
+            total = int(sh("sysctl", "-n", "hw.memsize"))
+            vmstat = sh("vm_stat")
+            page = int(vmstat.split("page size of")[1].split()[0])
+            pages = {}
+            for line in vmstat.splitlines()[1:]:
+                k, _, v = line.partition(":")
+                v = v.strip().rstrip(".")
+                if v.isdigit():
+                    pages[k.strip()] = int(v)
+            used = (pages.get("Pages active", 0) + pages.get("Pages wired down", 0)
+                    + pages.get("Pages occupied by compressor", 0)) * page
+            out.update(ram_used=used / 2**30, ram_total=total / 2**30)
+        else:
+            kv = {}
+            for line in open("/proc/meminfo"):
+                k, _, v = line.partition(":")
+                kv[k] = int(v.split()[0])
+            out.update(ram_used=(kv["MemTotal"] - kv["MemAvailable"]) / 2**20,
+                       ram_total=kv["MemTotal"] / 2**20)
+    except Exception:
+        pass
+    for label, pid in mine.items():
+        try:
+            out["procs"][label] = int(sh("ps", "-o", "rss=", "-p", str(pid)).strip()) / 2**20
+        except Exception:
+            pass
+    return out
+
+
+def _usage_loop():
+    global _usage
+    while True:
+        try:
+            _usage = _sample_usage()
+        except Exception as e:
+            _usage = {"error": str(e)}
+        time.sleep(2)
+
+
 def _cam_feed_loop(signals):
     """Pull MJPEG frames from the Jetson demo stream and emit as raw JPEG bytes."""
     if not JETSON_IP:
         return
-    url = f"http://{JETSON_IP}:8081/stream"
+    url = f"http://{JETSON_IP}:{os.environ.get('VISION_DEMO_PORT', '8081')}/stream"
     buf = b""
     while True:
         try:
@@ -342,7 +395,7 @@ def _vision_trigger_loop(signals):
 
         # Someone new entered the frame
         if faces > 0 and prev_faces == 0 and cooldown_ok:
-            submit_turn(signals, event="person_entered")
+            pipeline.camera_event("person_entered")
             last_trigger = now
 
         # A new deliberate gesture was detected
@@ -350,7 +403,7 @@ def _vision_trigger_loop(signals):
               and active_gesture not in ("idle", "none", "")
               and active_gesture != prev_gesture
               and cooldown_ok):
-            submit_turn(signals, event="gesture")
+            pipeline.camera_event("gesture")
             last_trigger = now
 
         prev_faces   = faces
@@ -453,7 +506,7 @@ class PipelineBar(QWidget):
         self._stage   = 0          # index into PIPELINE
         self._times   = [None] * len(PIPELINE)   # completion time (s) or None
         self._t_start = None       # when current stage started
-        self._font    = QFont("Menlo", 9)
+        self._font    = QFont(MONO, 9)
 
         self._tick = QTimer(self)
         self._tick.timeout.connect(self.update)   # repaint for live elapsed
@@ -549,9 +602,9 @@ class AdminConsole(QDialog):
         root.setContentsMargins(10, 10, 10, 10)
         root.setSpacing(10)
 
-        mono8  = QFont("Menlo", 8)
-        mono9  = QFont("Menlo", 9)
-        mono10 = QFont("Menlo", 10)
+        mono8  = QFont(MONO, 8)
+        mono9  = QFont(MONO, 9)
+        mono10 = QFont(MONO, 10)
 
         def _section(title):
             g = QGroupBox(title)
@@ -610,7 +663,7 @@ class AdminConsole(QDialog):
             b = QPushButton(label)
             b.setCheckable(True)
             b.setChecked(False)
-            b.setFont(QFont("Menlo", 12, QFont.Bold))
+            b.setFont(QFont(MONO, 12, QFont.Bold))
             b.setFixedHeight(52)
             b.setStyleSheet(
                 f"QPushButton {{ background: #1a1a1a; color: #555; border: 2px solid #333; border-radius: 6px; }}"
@@ -755,7 +808,7 @@ class AdminConsole(QDialog):
         sec6, lay6 = _section("RAW LOG")
         self.raw_log = QTextEdit()
         self.raw_log.setReadOnly(True)
-        self.raw_log.setFont(QFont("Menlo", 8))
+        self.raw_log.setFont(QFont(MONO, 8))
         self.raw_log.setStyleSheet(
             "background: #0a0a0a; color: #555; border: 1px solid #222; border-radius: 3px;"
         )
@@ -776,12 +829,12 @@ class AdminConsole(QDialog):
         if not text:
             return
         self.manual_input.clear()
-        submit_turn(self.signals, heard=text, event="speech")
+        pipeline.speech_final(text, from_mic=False)
 
     def _on_mute_toggle(self, checked):
         if checked:
             _muted.set()
-            _interrupt_speech(self.signals)
+            pipeline.interrupt()
             self.mute_btn.setText("🔇  MUTED")
         else:
             _muted.clear()
@@ -802,27 +855,24 @@ class AdminConsole(QDialog):
             auto_interrupt.clear()
 
     def _on_interrupt_now(self):
-        _interrupt_speech(self.signals)
+        pipeline.interrupt()
         self.signals.status.emit("listening")
 
     def _on_input_visuals(self):
         """Ask GLaDOS to comment on what the camera sees right now."""
         if not vision.is_connected():
             self._log_line.emit("[admin] input visuals: Jetson NOT connected — vision will be null")
-        submit_turn(self.signals, event="visual_check")
+        pipeline.camera_event("visual_check")
 
     def _on_clear_history(self):
-        with brain_lock:
-            brain._history.clear()
+        brain.reset()
         self._log_line.emit("[admin] conversation history cleared")
 
     def _on_force_speak(self):
         text = self.force_input.text().strip()
         if not text:
             return
-        dispatch_speech(text)
-        _tts_queue.append(text)
-        self.signals.pipe_queue.emit(list(_tts_queue))
+        pipeline.say_direct(text)
         self.force_input.clear()
         self._log_line.emit(f"[admin] force-speak: {text!r}")
 
@@ -839,9 +889,9 @@ class AdminConsole(QDialog):
             daemon_proc.wait(timeout=3)
         except Exception:
             pass
-        env = {**os.environ, "PYTHONUNBUFFERED": "1"}
+        env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
         p = subprocess.Popen(
-            ["python3", "speech/glados_daemon.py"],
+            [sys.executable, "speech/glados_daemon.py"],
             cwd=str(ROOT),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -918,27 +968,18 @@ class GladosWindow(QMainWindow):
             c = "#5c5" if v < 60 else "#e5a00d" if v < 85 else "#c55"
             return f"<span style='color:{c}'>{v:.0f}%</span>"
 
-        # ── Mac
-        try:
-            import psutil
-            vm  = psutil.virtual_memory()
-            mac = (f"<b>MAC</b>&nbsp;&nbsp;cpu {pct(psutil.cpu_percent(None))}"
-                   f"&nbsp; ram {vm.used/2**30:.1f}/{vm.total/2**30:.0f}G {pct(vm.percent)}")
-            parts = []
-            for p in procs:
-                if p.poll() is not None:
-                    continue
-                label = "llama" if "llama" in str(p.args) else "tts"
-                try:
-                    pp = psutil.Process(p.pid)
-                    parts.append(f"{label} {pp.memory_info().rss/2**30:.1f}G")
-                except psutil.Error:
-                    pass
-            me = psutil.Process()
-            parts.append(f"gui {me.memory_info().rss/2**30:.1f}G")
-            mac += "<br><span style='color:#666'>&nbsp;&nbsp;" + " · ".join(parts) + "</span>"
-        except Exception as e:
-            mac = f"<b>MAC</b>&nbsp;&nbsp;<span style='color:#555'>psutil n/a ({e})</span>"
+        # ── Mac (sampled in a background thread)
+        u = _usage
+        if not u or u.get("error"):
+            mac = f"<b>{HOST_LABEL}</b>&nbsp;&nbsp;<span style='color:#555'>{u.get('error', 'sampling…') if u else 'sampling…'}</span>"
+        else:
+            mac = f"<b>{HOST_LABEL}</b>&nbsp;&nbsp;cpu {pct(u.get('cpu'))}"
+            if u.get("ram_total"):
+                mac += (f"&nbsp; ram {u['ram_used']:.1f}/{u['ram_total']:.0f}G "
+                        f"{pct(100 * u['ram_used'] / u['ram_total'])}")
+            parts = [f"{k} {v:.1f}G" for k, v in u.get("procs", {}).items()]
+            if parts:
+                mac += "<br><span style='color:#666'>&nbsp;&nbsp;" + " · ".join(parts) + "</span>"
 
         # ── Jetson (from the demo's /status)
         j = vision.system if vision.is_connected() else {}
@@ -1016,9 +1057,9 @@ class GladosWindow(QMainWindow):
         QApplication.setPalette(pal)
 
     def _build_ui(self):
-        mono   = QFont("Menlo", 11)
-        small  = QFont("Menlo", 10)
-        title  = QFont("Menlo", 13, QFont.Bold)
+        mono   = QFont(MONO, 11)
+        small  = QFont(MONO, 10)
+        title  = QFont(MONO, 13, QFont.Bold)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -1036,7 +1077,7 @@ class GladosWindow(QMainWindow):
 
         self.admin_console = AdminConsole(self.signals, parent=self)
         admin_btn = QPushButton("⚙ admin")
-        admin_btn.setFont(QFont("Menlo", 9))
+        admin_btn.setFont(QFont(MONO, 9))
         admin_btn.setFixedHeight(22)
         admin_btn.setStyleSheet(
             "QPushButton { background: #1a1a1a; color: #666; border: 1px solid #333;"
@@ -1072,7 +1113,7 @@ class GladosWindow(QMainWindow):
         sim_col.addWidget(self.sim_label, stretch=1)
 
         self.action_lbl = QLabel("")
-        self.action_lbl.setFont(QFont("Menlo", 9))
+        self.action_lbl.setFont(QFont(MONO, 9))
         self.action_lbl.setAlignment(Qt.AlignCenter)
         self.action_lbl.setFixedHeight(18)
         self.action_lbl.setStyleSheet("color: #555; background: transparent;")
@@ -1104,11 +1145,11 @@ class GladosWindow(QMainWindow):
             ol.setContentsMargins(8, 4, 8, 4)
             ol.setSpacing(2)
             hdr = QLabel(label)
-            hdr.setFont(QFont("Menlo", 8, QFont.Bold))
+            hdr.setFont(QFont(MONO, 8, QFont.Bold))
             hdr.setStyleSheet(f"color: {color}; background: transparent; border: none;")
             ol.addWidget(hdr)
             body = QLabel("—")
-            body.setFont(QFont("Menlo", 10))
+            body.setFont(QFont(MONO, 10))
             body.setStyleSheet("color: #bbb; background: transparent; border: none;")
             body.setWordWrap(True)
             body.setAlignment(Qt.AlignTop | Qt.AlignLeft)
@@ -1129,11 +1170,11 @@ class GladosWindow(QMainWindow):
 
         # Live vision data — refreshed constantly, independent of turns
         box_vision_frame, self.box_vision = _pipe_box("VISION  /  LIVE", "#2b8fcc", min_h=96)
-        self.box_vision.setFont(QFont("Menlo", 9))
+        self.box_vision.setFont(QFont(MONO, 9))
         panel_layout.addWidget(box_vision_frame)
 
         box_sys_frame, self.box_sys = _pipe_box("SYSTEM  /  USAGE", "#888888", min_h=92)
-        self.box_sys.setFont(QFont("Menlo", 9))
+        self.box_sys.setFont(QFont(MONO, 9))
         panel_layout.addSpacing(4)
         panel_layout.addWidget(box_sys_frame)
         panel_layout.addWidget(_arrow())
@@ -1153,7 +1194,7 @@ class GladosWindow(QMainWindow):
         self.interrupt_btn = QPushButton("⚡ interrupt: on")
         self.interrupt_btn.setCheckable(True)
         self.interrupt_btn.setChecked(True)
-        self.interrupt_btn.setFont(QFont("Menlo", 8))
+        self.interrupt_btn.setFont(QFont(MONO, 8))
         self.interrupt_btn.setFixedHeight(20)
         self.interrupt_btn.setStyleSheet(
             "QPushButton { background: #2a2a2a; color: #4caf50; border: 1px solid #333;"
@@ -1165,7 +1206,7 @@ class GladosWindow(QMainWindow):
         footer.addWidget(self.interrupt_btn)
 
         self.timing_lbl = QLabel("")
-        self.timing_lbl.setFont(QFont("Menlo", 8))
+        self.timing_lbl.setFont(QFont(MONO, 8))
         self.timing_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.timing_lbl.setStyleSheet("color: #444; border: none;")
         footer.addWidget(self.timing_lbl, 1)
@@ -1197,12 +1238,12 @@ class GladosWindow(QMainWindow):
         cam_bar = QHBoxLayout()
         cam_bar.setContentsMargins(0, 0, 0, 0)
         cam_hdr = QLabel("JETSON CAM")
-        cam_hdr.setFont(QFont("Menlo", 8, QFont.Bold))
+        cam_hdr.setFont(QFont(MONO, 8, QFont.Bold))
         cam_hdr.setStyleSheet("color: #2b8fcc;")
         cam_bar.addWidget(cam_hdr)
         cam_bar.addStretch()
         self.perception_lbl = QLabel("")
-        self.perception_lbl.setFont(QFont("Menlo", 8))
+        self.perception_lbl.setFont(QFont(MONO, 8))
         self.perception_lbl.setStyleSheet("color: #2b5a7a;")
         cam_bar.addWidget(self.perception_lbl)
         cam_row.addLayout(cam_bar)
@@ -1302,8 +1343,9 @@ class GladosWindow(QMainWindow):
             self.interrupt_btn.setText("⚡ interrupt: off")
 
     def _on_metrics(self, source: str, line: str):
-        # Append quietly to timing label so it doesn't take up space
-        self.timing_lbl.setText(line)
+        # Only the end-to-end latency goes in the footer; llm/tts detail is in the admin log
+        if source == "latency":
+            self.timing_lbl.setText(line)
 
     def _render_frame(self):
         mujoco.mj_step(model, data)
@@ -1324,16 +1366,18 @@ class GladosWindow(QMainWindow):
 
 def clear_queues():
     """Remove stale speech/sim queue files from previous runs."""
-    for d in ["/tmp/glados_queue", "/tmp/glados_sim_queue"]:
-        p = pathlib.Path(d)
+    for p in [SPEECH_QUEUE_DIR, SPEECH_QUEUE_DIR.parent / "glados_sim_queue"]:
         if p.exists():
             for f in p.glob("*"):
-                f.unlink(missing_ok=True)
+                try:
+                    f.unlink()
+                except OSError:
+                    pass
     print("[launch] cleared stale queue files")
 
 def start_proc(cmd, name, stdout=None):
     print(f"[launch] {name}...")
-    env = {**os.environ, "PYTHONUNBUFFERED": "1"}
+    env = {**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
     p = subprocess.Popen(
         cmd, cwd=str(ROOT),
         stdout=stdout,
@@ -1386,54 +1430,25 @@ def _llama_reader(proc: subprocess.Popen, signals: "Signals"):
 
 
 def _tts_reader(proc: subprocess.Popen, signals: "Signals"):
-    """Parse glados_daemon stdout, drive pipeline bar, and emit TTS timing metrics."""
-    import re
-    pat_rtf  = re.compile(r"\[(\d+)ms to first audio.*RTF ([\d.]+)x\]")
-    pat_wait = re.compile(r"queue_wait\s+([\d.]+)s.*tts_first_segment\s+([\d.]+)s\s*=\s*([\d.]+)s")
-    pat_play = re.compile(r"playback\s+([\d.]+)s\s*\(([\d.]+)s of audio\)")
-    buf: dict = {}
+    """Forward the speech daemon's events ([speak-start] …) to the pipeline."""
+    import json as _json
     for raw in proc.stdout:
         line = raw.decode(errors="replace").rstrip()
         print(line)
-        if _admin_console is not None:
-            _admin_console.push_log(line)
-        m = pat_rtf.search(line)
-        if m:
-            buf["first_ms"] = int(m.group(1))
-            buf["rtf"]      = float(m.group(2))
-            _currently_speaking.set()
-            signals.status.emit("speaking")   # audio playback has begun
-            # Pop the next queued sentence and show it in the SPEAKING box
-            if _tts_queue:
-                speaking = _tts_queue.popleft()
-                signals.pipe_speak.emit(speaking)
-                signals.pipe_queue.emit(list(_tts_queue))
+        _log(line)
+        if not line.startswith("["):
             continue
-        m = pat_wait.search(line)
-        if m:
-            buf["q_wait"] = float(m.group(1))
-            buf["tts"]    = float(m.group(2))
-            continue
-        m = pat_play.search(line)
-        if m:
-            buf["play_s"]  = float(m.group(1))
-            buf["audio_s"] = float(m.group(2))
-            q    = buf.get("q_wait", 0)
-            tts  = buf.get("tts",    0)
-            play = buf.get("play_s", 0)
-            rtf  = buf.get("rtf", 0)
-            signals.metrics.emit(
-                "tts",
-                f"tts  q {q:.2f}s  synth {tts:.2f}s  play {play:.1f}s  RTF {rtf:.2f}x"
-            )
-            # Sentence finished playing
-            _currently_speaking.clear()
-            signals.pipe_done.emit()
-            # after last utterance finishes playing, go back to listen
-            # (approximate — playback timing line comes after playback ends)
-            if not _tts_queue:
-                signals.status.emit("listening")
-            buf.clear()
+        tag, _, rest = line[1:].partition("] ")
+        if tag in ("speak-start", "speak-end", "cancelled"):
+            try:
+                payload = _json.loads(rest) if rest else {}
+            except ValueError:
+                payload = {}
+            pipeline.tts_event(tag, payload)
+            if tag == "speak-end" and payload:
+                signals.metrics.emit(
+                    "tts", f"tts  synth-first {payload.get('synth_first', 0):.2f}s  "
+                           f"audio {payload.get('audio', 0):.1f}s  RTF {payload.get('rtf', 0):.2f}x")
 
 def wait_for_llama(timeout=60):
     print("[launch] waiting for llama-server", end="", flush=True)
@@ -1470,36 +1485,54 @@ def shutdown():
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main():
-    global daemon_proc, _admin_console
+    global daemon_proc, _admin_console, _signals, listener
 
     clear_queues()
     vision.start()
-    llama_proc  = start_proc([LLAMA_CMD, "-m", str(GGUF), "--port", "8080"], "llama-server",
+
+    # Start the LLM server and the speech daemon together — both take seconds to
+    # load and neither depends on the other.
+    #   -np 1    one slot: every request hits the same prompt cache
+    #   -c 4096  enough for prompt + history; far less memory than the default
+    # Extra flags: LLAMA_ARGS="-t 8" ./start.sh
+    import shlex
+    #   -ngl 99  run every layer on the GPU (Metal)
+    llama_cmd = [LLAMA_CMD, "-m", str(GGUF), "--port", "8080", "-np", "1", "-c", "4096", "-ngl", "99",
+                 *shlex.split(os.environ.get("LLAMA_ARGS", ""))]
+    llama_proc  = start_proc(llama_cmd, "llama-server", stdout=subprocess.PIPE)
+    daemon_proc = start_proc([sys.executable, "speech/glados_daemon.py"], "glados_daemon",
                              stdout=subprocess.PIPE)
-    wait_for_llama()
-    daemon_proc = start_proc(["python3", "speech/glados_daemon.py"], "glados_daemon",
-                             stdout=subprocess.PIPE)
-    time.sleep(1)
 
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
 
-    signals = Signals()
+    signals  = Signals()
+    _signals = signals
 
     threading.Thread(target=_llama_reader, args=(llama_proc,  signals), daemon=True, name="llama-reader").start()
     threading.Thread(target=_tts_reader,   args=(daemon_proc, signals), daemon=True, name="tts-reader").start()
 
-    threading.Thread(target=_brain_loop,    args=(signals,), daemon=True, name="brain").start()
+    wait_for_llama()
+    # Evaluate the fixed prompt once now, so the first real turn is as fast as the rest.
+    t = brain.warmup()
+    print(f"[launch] prompt cache warmed in {t:.1f}s")
+
+    threading.Thread(target=pipeline.run,   daemon=True, name="brain").start()
     threading.Thread(target=_gesture_loop,  args=(signals,), daemon=True, name="gesture").start()
     threading.Thread(target=_cam_feed_loop,     args=(signals,), daemon=True, name="cam-feed").start()
     threading.Thread(target=_perception_loop,   args=(signals,), daemon=True, name="perception").start()
     threading.Thread(target=_vision_trigger_loop, args=(signals,), daemon=True, name="vision-trigger").start()
+    threading.Thread(target=_usage_loop, daemon=True, name="usage").start()
 
-    global listener
     listener = SpeechListener(
-        on_transcription=lambda text: on_transcription(text, signals),
+        on_transcription=on_transcription,
+        # Early start: the LLM begins on the transcript ~160 ms into a pause and
+        # is cancelled if the speaker carries on.
+        on_speculative=pipeline.speech_speculative,
+        on_speculation_cancelled=pipeline.speculation_cancelled,
         language="en",
         model_final="distil-small.en",
+        gap_chunks=GAP_MS // 32,
     )
     threading.Thread(target=listener.start, daemon=True, name="listener").start()
     signals.status.emit("listening")
