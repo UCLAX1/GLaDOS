@@ -103,16 +103,22 @@ def snapshot(min_interval: float = 1.0) -> dict:
         now = time.time()
         if now - _cache[0] < min_interval and _cache[1]:
             return _cache[1]
-        ram_used, ram_total = _mem()
-        cpu_t, gpu_t = _temps()
+        def safe(fn, default=None):
+            try:
+                return fn()
+            except Exception:
+                return default
+
+        ram_used, ram_total = safe(_mem, (None, None))
+        cpu_t, gpu_t = safe(_temps, (None, None))
         snap = {
-            "cpu_pct":     _cpu_percent(),
-            "gpu_pct":     _gpu_percent(),
+            "cpu_pct":     safe(_cpu_percent),
+            "gpu_pct":     safe(_gpu_percent),
             "ram_used_gb": ram_used,
             "ram_total_gb": ram_total,
             "cpu_temp_c":  cpu_t,
             "gpu_temp_c":  gpu_t,
-            "demo_rss_gb": _proc_rss_gb(),
+            "demo_rss_gb": safe(_proc_rss_gb),
         }
         _cache = (now, snap)
         return snap

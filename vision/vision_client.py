@@ -199,6 +199,8 @@ class VisionClient:
         r.raise_for_status()
         self.source = "demo"
         raw = r.json()
+        if raw.get("error"):
+            raise RuntimeError(f"Jetson /status error: {raw['error']}")
         self.system = raw.get("system") or {}
         with self._lock:
             self._raw = {"people": raw.get("people", [])}   # id, name, expr, gestures, dist
