@@ -12,6 +12,9 @@ and brain loop as threads, and renders the sim live inside a PySide6 window.
 
 import importlib
 import os
+# torch/faster-whisper leave a semaphore behind when we os._exit(); harmless,
+# macOS reclaims it. Silence the resource_tracker warning (inherited by its subprocess).
+os.environ.setdefault("PYTHONWARNINGS", "ignore::UserWarning:multiprocessing.resource_tracker")
 import pathlib
 import queue
 import signal
@@ -30,15 +33,17 @@ from PySide6.QtGui import QImage, QPixmap, QFont, QColor, QPalette, QTextCursor,
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QDialog, QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QTextEdit, QFrame, QSizePolicy, QPushButton,
-    QSlider, QCheckBox, QLineEdit, QGroupBox, QScrollArea,
+    QSlider, QCheckBox, QLineEdit, QGroupBox, QScrollArea, QTabWidget, QSplitter,
 )
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from central_ai.brain import GladosBrain
+from central_ai.brain import GladosBrain, build_turn
+import json
 from control.mujoco_control import MujocoControl
 from actions.sequence import Sequence, TICK_RATE
 from speech.speech_queue import enqueue, clear as clear_tts_queue
 from listening.listener import SpeechListener
+from vision.vision_client import VisionClient
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -46,8 +51,9 @@ ROOT      = pathlib.Path(__file__).parent
 GGUF      = ROOT / "central_ai/benchmarking_tools/Bonsai-8B-Q1_0.gguf"
 MODEL_XML = ROOT / "sim/model/glados.xml"
 sys.path.insert(0, str(ROOT / "sim"))
-HARDWARE  = bool(os.environ.get("GLADOS_HARDWARE"))
-LLAMA_CMD = "llama-server"
+HARDWARE   = bool(os.environ.get("GLADOS_HARDWARE"))
+LLAMA_CMD  = "llama-server"
+JETSON_IP  = os.environ.get("JETSON_IP", "")
 
 SIM_W, SIM_H = 640, 480
 FPS = 30
@@ -70,6 +76,9 @@ try:
     model = _sim_params.load_model("glados.xml")
 except (ImportError, Exception):
     model = mujoco.MjModel.from_xml_path(str(MODEL_XML))
+# Bump offscreen framebuffer so the renderer can grow with the window.
+model.vis.global_.offheight = 2048
+model.vis.global_.offwidth  = 2048
 data     = mujoco.MjData(model)
 robot    = MujocoControl(model, data)
 renderer = mujoco.Renderer(model, height=SIM_H, width=SIM_W)
@@ -87,7 +96,12 @@ import collections as _collections
 
 brain        = GladosBrain()
 brain_lock   = threading.Lock()
-_utterance_q: queue.Queue = queue.Queue(maxsize=1)
+vision       = VisionClient(JETSON_IP or None)   # polls Jetson; no-op if JETSON_IP unset
+# Input turns: FIFO (oldest first). A deque + condition instead of
+# Queue(maxsize=1), which silently dropped older inputs ("latest wins").
+_turn_q   = _collections.deque()
+_turn_cv  = threading.Condition()
+_cancel_gen = 0          # bumped on interrupt; in-flight replies with an older gen stop
 _gesture_q:   queue.Queue = queue.Queue(maxsize=1)
 _tts_queue   = _collections.deque()   # local mirror of sentences awaiting TTS
 _last_unspoken: list[str] = []        # sentences queued but not yet played at interrupt time
@@ -118,7 +132,8 @@ def dispatch_gesture(gesture: str):
 
 def _interrupt_speech(signals):
     """Clear the TTS queue and record what was left unspoken."""
-    global _last_unspoken
+    global _last_unspoken, _cancel_gen
+    _cancel_gen += 1    # stop the reply that is still being generated
     # Save whatever was still pending (hasn't started playing)
     _last_unspoken = list(_tts_queue)
     _tts_queue.clear()
@@ -126,56 +141,101 @@ def _interrupt_speech(signals):
     signals.pipe_queue.emit([])
     signals.pipe_speak.emit("—")
 
-def on_transcription(text: str, signals):
-    if _deafened.is_set() or len(text.strip().split()) < 1:
-        return
+# Admin "next-turn inject" — plain Python state, written by the GUI thread,
+# read by the brain thread. (Never touch Qt widgets from the brain thread.)
+_inject_lock    = threading.Lock()
+_inject_text    = ""
+_inject_persist = False
 
-    was_speaking = _currently_speaking.is_set() or bool(_tts_queue)
 
-    # Auto-interrupt: clear pending TTS if barge-in is enabled and we were speaking
-    if was_speaking and auto_interrupt.is_set():
-        _interrupt_speech(signals)
+def _take_inject() -> str:
+    global _inject_text
+    with _inject_lock:
+        text = _inject_text.strip()
+        if text and not _inject_persist:
+            _inject_text = ""
+            if _admin_console is not None:
+                _admin_console.inject_consumed.emit()   # clears the box on the GUI thread
+        return text
 
-    signals.pipe_input.emit(text)
-    signals.status.emit("stt")
+
+def submit_turn(signals, heard: str = "", event: str = "speech", from_mic: bool = False):
+    """
+    Single entry point for every input: mic, admin text, vision events, the
+    'input visuals' button. The brain loop merges it with the live vision
+    snapshot into ONE JSON message.
+    """
+    heard = (heard or "").strip()
+    if event == "speech":
+        if not heard or (from_mic and _deafened.is_set()):
+            return
+        # Barge-in only applies to real speech
+        if (_currently_speaking.is_set() or _tts_queue) and auto_interrupt.is_set():
+            _interrupt_speech(signals)
+
+    turn = {"heard": heard, "event": event}
+    with _turn_cv:
+        if event != "speech":
+            # Camera events only matter "now": skip if anything is already waiting
+            if _turn_q:
+                return
+        else:
+            # Speech outranks stale camera events that haven't been handled yet
+            for t in [t for t in _turn_q if t["event"] != "speech"]:
+                _turn_q.remove(t)
+        _turn_q.append(turn)            # FIFO: oldest is handled first
+        _turn_cv.notify()
     signals.status.emit("thinking")
-    try:
-        _utterance_q.get_nowait()
-    except queue.Empty:
-        pass
-    _utterance_q.put_nowait(text)
+
+
+def on_transcription(text: str, signals):
+    """SpeechListener callback."""
+    submit_turn(signals, heard=text, event="speech", from_mic=True)
+
 
 def _brain_loop(signals):
     global _last_unspoken
     while True:
-        text = _utterance_q.get()
-        t0   = time.time()
+        with _turn_cv:
+            while not _turn_q:
+                _turn_cv.wait()
+            turn = _turn_q.popleft()                     # oldest first
+            if turn["event"] == "speech":
+                # Speech that piled up while she was busy is one continued
+                # thought (VAD splits on pauses) — merge it, in spoken order.
+                parts = [turn["heard"]]
+                while _turn_q and _turn_q[0]["event"] == "speech":
+                    parts.append(_turn_q.popleft()["heard"])
+                turn = {"heard": " ".join(parts), "event": "speech"}
+        my_gen = _cancel_gen
+        t0     = time.time()
 
-        # If GLaDOS was interrupted mid-speech, prepend context so the model
-        # knows it didn't finish and can acknowledge the barge-in naturally.
-        prefix_parts = []
-        if _last_unspoken:
-            unfinished = " ".join(_last_unspoken)
-            prefix_parts.append(
-                f"[System: You were interrupted mid-response. "
-                f"You hadn't finished saying: \"{unfinished}\". "
-                f"Acknowledge the interruption naturally if relevant.]"
-            )
-            _last_unspoken = []
+        # No "you were interrupted" note: at our latency the unfinished line is
+        # stale by the time she replies, and it made her rehash old answers.
+        notes = []
+        inject = _take_inject()
+        if inject:
+            notes.append(inject)
 
-        # Admin inject (one-shot or persistent)
+        user_json = build_turn(
+            heard=turn["heard"],
+            vision=vision.snapshot(),
+            event=turn["event"],
+            notes=notes or None,
+        )
+        signals.pipe_input.emit(user_json)
         if _admin_console is not None:
-            inject = _admin_console.get_inject()
-            if inject:
-                prefix_parts.append(inject)
-
-        if prefix_parts:
-            text = "\n".join(prefix_parts) + "\n" + text
+            _admin_console.push_log(f"[turn] {user_json}")
 
         signals.pipe_brain.emit("")          # clear brain box for new turn
         with brain_lock:
             first = True
-            for sentence in brain.respond_stream(text):
+            for sentence in brain.respond_stream(user_json):
+                if _cancel_gen != my_gen:
+                    # Interrupted: drop the rest of this reply
+                    if _admin_console is not None:
+                        _admin_console.push_log("[brain] reply cancelled by interrupt")
+                    break
                 if not sentence.strip():
                     continue
                 if first:
@@ -185,7 +245,15 @@ def _brain_loop(signals):
                 _tts_queue.append(sentence)
                 signals.pipe_brain.emit(sentence)
                 signals.pipe_queue.emit(list(_tts_queue))
+        if _cancel_gen != my_gen:
+            signals.timing.emit(time.time() - t0)
+            continue                                       # no gesture for a cancelled reply
         response = brain.last_response or {}
+        if first:
+            signals.pipe_brain.emit("(silent)")
+            signals.status.emit("listening")
+            if _admin_console is not None:
+                _admin_console.push_log(f"[brain] stayed silent — raw: {response}")
         dispatch_gesture(response.get("gesture", "idle"))
         signals.timing.emit(time.time() - t0)
 
@@ -210,6 +278,84 @@ def _gesture_loop(signals):
 def _home_pose():
     def tick(): time.sleep(TICK_RATE)
     Sequence(robot, tick_fn=tick).pose(duration=1.5, lerp=True, **HOME).play()
+
+
+def _cam_feed_loop(signals):
+    """Pull MJPEG frames from the Jetson demo stream and emit as raw JPEG bytes."""
+    if not JETSON_IP:
+        return
+    url = f"http://{JETSON_IP}:8081/stream"
+    buf = b""
+    while True:
+        try:
+            req = urllib.request.urlopen(url, timeout=5)
+            while True:
+                chunk = req.read(4096)
+                if not chunk:
+                    break
+                buf += chunk
+                # Scan for JPEG start/end markers
+                s = buf.find(b"\xff\xd8")
+                e = buf.find(b"\xff\xd9", s + 2) if s != -1 else -1
+                if s != -1 and e != -1:
+                    signals.cam_frame.emit(buf[s:e + 2])
+                    buf = buf[e + 2:]
+                    if len(buf) > 1 << 20:   # safety: drop if buffer bloats
+                        buf = b""
+        except Exception:
+            buf = b""
+            time.sleep(2)
+
+
+def _perception_loop(signals):
+    """Emit the latest perception string every 2 s."""
+    while True:
+        ctx = vision.context_string()
+        if ctx:
+            signals.perception.emit(ctx)
+        time.sleep(2)
+
+
+# Gestures that should proactively trigger a GLaDOS response when detected.
+_TRIGGER_GESTURES = {"waving", "raised_hand", "pointing", "thumbs_up", "thumbs_down"}
+_TRIGGER_COOLDOWN = 8.0   # seconds between proactive triggers
+
+def _vision_trigger_loop(signals):
+    """Watch for vision events and feed them as utterances when notable things happen."""
+    if not JETSON_IP:
+        return
+    prev_faces   = 0
+    prev_gesture = ""
+    last_trigger = 0.0
+
+    while True:
+        time.sleep(1.0)
+        snap = vision.latest()   # thread-safe copy of latest perception dict
+        if not snap:
+            continue
+
+        now            = time.time()
+        faces          = snap.get("face_count", 0)
+        gestures       = snap.get("gestures", [])          # list of gesture strings
+        active_gesture = gestures[0] if gestures else ""   # first/most prominent one
+        cooldown_ok    = (now - last_trigger) > _TRIGGER_COOLDOWN
+
+        # Someone new entered the frame
+        if faces > 0 and prev_faces == 0 and cooldown_ok:
+            submit_turn(signals, event="person_entered")
+            last_trigger = now
+
+        # A new deliberate gesture was detected
+        elif (active_gesture
+              and active_gesture not in ("idle", "none", "")
+              and active_gesture != prev_gesture
+              and cooldown_ok):
+            submit_turn(signals, event="gesture")
+            last_trigger = now
+
+        prev_faces   = faces
+        prev_gesture = active_gesture
+
 
 # ── Interactive sim viewport ──────────────────────────────────────────────────
 
@@ -274,6 +420,9 @@ class Signals(QObject):
     pipe_speak  = Signal(str)        # sentence now being spoken
     pipe_done   = Signal()           # finished speaking
     pipe_action = Signal(str)        # current gesture/action name
+    # camera
+    cam_frame   = Signal(bytes)      # raw JPEG bytes from Jetson MJPEG stream
+    perception  = Signal(str)        # latest perception context string
 
 # ── Pipeline bar ──────────────────────────────────────────────────────────────
 
@@ -380,6 +529,7 @@ class AdminConsole(QDialog):
 
     # Signal so the log appender (called from any thread) is thread-safe
     _log_line = Signal(str)
+    inject_consumed = Signal()   # emitted by brain thread after a one-shot inject is used
 
     def __init__(self, signals: "Signals", parent=None):
         super().__init__(parent)
@@ -499,6 +649,9 @@ class AdminConsole(QDialog):
         self.btn_home = _btn("⌂ home pose", "#1a2a1a", "#4caf50")
         self.btn_home.clicked.connect(lambda: threading.Thread(target=_home_pose, daemon=True).start())
         row2.addWidget(self.btn_home)
+        self.btn_visuals = _btn("👁 input visuals", "#1a2233", "#2b8fcc")
+        self.btn_visuals.clicked.connect(self._on_input_visuals)
+        row2.addWidget(self.btn_visuals)
         row2.addStretch()
         lay.addLayout(row2)
 
@@ -514,9 +667,12 @@ class AdminConsole(QDialog):
             "background: #141414; color: #ddd; border: 1px solid #333; border-radius: 3px;"
         )
         lay2.addWidget(self.inject_box)
+        self.inject_box.textChanged.connect(self._sync_inject)
+        self.inject_consumed.connect(self.inject_box.clear)
         row3 = QHBoxLayout()
         self.cb_inject_persist = _toggle("persist (every turn)", default=False)
         row3.addWidget(self.cb_inject_persist)
+        self.cb_inject_persist.toggled.connect(self._sync_inject)
         row3.addStretch()
         self.btn_inject_clear = _btn("clear")
         self.btn_inject_clear.clicked.connect(self.inject_box.clear)
@@ -620,7 +776,7 @@ class AdminConsole(QDialog):
         if not text:
             return
         self.manual_input.clear()
-        on_transcription(text, self.signals)
+        submit_turn(self.signals, heard=text, event="speech")
 
     def _on_mute_toggle(self, checked):
         if checked:
@@ -648,6 +804,12 @@ class AdminConsole(QDialog):
     def _on_interrupt_now(self):
         _interrupt_speech(self.signals)
         self.signals.status.emit("listening")
+
+    def _on_input_visuals(self):
+        """Ask GLaDOS to comment on what the camera sees right now."""
+        if not vision.is_connected():
+            self._log_line.emit("[admin] input visuals: Jetson NOT connected — vision will be null")
+        submit_turn(self.signals, event="visual_check")
 
     def _on_clear_history(self):
         with brain_lock:
@@ -702,14 +864,12 @@ class AdminConsole(QDialog):
         self.raw_log.insertPlainText(line + "\n")
         self.raw_log.ensureCursorVisible()
 
-    def get_inject(self) -> str | None:
-        """Return the current inject text (and clear if not persistent)."""
-        text = self.inject_box.toPlainText().strip()
-        if not text:
-            return None
-        if not self.cb_inject_persist.isChecked():
-            self.inject_box.clear()
-        return text
+    def _sync_inject(self, *_):
+        """Mirror the inject box into plain globals the brain thread can read safely."""
+        global _inject_text, _inject_persist
+        with _inject_lock:
+            _inject_text    = self.inject_box.toPlainText()
+            _inject_persist = self.cb_inject_persist.isChecked()
 
 
 # ── Main window ───────────────────────────────────────────────────────────────
@@ -723,7 +883,7 @@ class GladosWindow(QMainWindow):
         self.signals = signals
         self.setWindowTitle("GLaDOS")
         self.setMinimumSize(640, 400)
-        self.resize(SIM_W + 340, SIM_H + 100)
+        self.resize(SIM_W + 360, SIM_H + 320)
         self._setup_palette()
         self._build_ui()
         self._connect_signals()
@@ -738,8 +898,100 @@ class GladosWindow(QMainWindow):
         self._timer.timeout.connect(self._render_frame)
         self._timer.start(1000 // FPS)
 
+        # Live vision box refresh (4 Hz)
+        self._vision_timer = QTimer(self)
+        self._vision_timer.timeout.connect(self._refresh_vision_box)
+        self._vision_timer.start(250)
+
+        # System usage refresh (1 Hz)
+        self._sys_timer = QTimer(self)
+        self._sys_timer.timeout.connect(self._refresh_sys_box)
+        self._sys_timer.start(1000)
+
         # Home pose on startup
         threading.Thread(target=_home_pose, daemon=True).start()
+
+    def _refresh_sys_box(self):
+        def pct(v):
+            if v is None:
+                return "<span style='color:#555'>n/a</span>"
+            c = "#5c5" if v < 60 else "#e5a00d" if v < 85 else "#c55"
+            return f"<span style='color:{c}'>{v:.0f}%</span>"
+
+        # ── Mac
+        try:
+            import psutil
+            vm  = psutil.virtual_memory()
+            mac = (f"<b>MAC</b>&nbsp;&nbsp;cpu {pct(psutil.cpu_percent(None))}"
+                   f"&nbsp; ram {vm.used/2**30:.1f}/{vm.total/2**30:.0f}G {pct(vm.percent)}")
+            parts = []
+            for p in procs:
+                if p.poll() is not None:
+                    continue
+                label = "llama" if "llama" in str(p.args) else "tts"
+                try:
+                    pp = psutil.Process(p.pid)
+                    parts.append(f"{label} {pp.memory_info().rss/2**30:.1f}G")
+                except psutil.Error:
+                    pass
+            me = psutil.Process()
+            parts.append(f"gui {me.memory_info().rss/2**30:.1f}G")
+            mac += "<br><span style='color:#666'>&nbsp;&nbsp;" + " · ".join(parts) + "</span>"
+        except Exception as e:
+            mac = f"<b>MAC</b>&nbsp;&nbsp;<span style='color:#555'>psutil n/a ({e})</span>"
+
+        # ── Jetson (from the demo's /status)
+        j = vision.system if vision.is_connected() else {}
+        if j:
+            ram = ""
+            if j.get("ram_used_gb") is not None and j.get("ram_total_gb"):
+                ram_pct = 100 * j["ram_used_gb"] / j["ram_total_gb"]
+                ram = f"&nbsp; ram {j['ram_used_gb']:.1f}/{j['ram_total_gb']:.0f}G {pct(ram_pct)}"
+            temp = max([t for t in (j.get("cpu_temp_c"), j.get("gpu_temp_c")) if t is not None],
+                       default=None)
+            jet = (f"<b>JETSON</b>&nbsp;cpu {pct(j.get('cpu_pct'))}&nbsp; gpu {pct(j.get('gpu_pct'))}"
+                   f"{ram}")
+            extra = []
+            if temp is not None:
+                tc = "#5c5" if temp < 65 else "#e5a00d" if temp < 80 else "#c55"
+                extra.append(f"<span style='color:{tc}'>{temp:.0f}°C</span>")
+            if j.get("demo_rss_gb") is not None:
+                extra.append(f"vision {j['demo_rss_gb']:.1f}G")
+            if extra:
+                jet += "<br><span style='color:#666'>&nbsp;&nbsp;" + " · ".join(extra) + "</span>"
+        else:
+            jet = "<b>JETSON</b>&nbsp;<span style='color:#555'>no stats (demo not reachable or old version)</span>"
+
+        self.box_sys.setText(mac + "<br>" + jet)
+
+    def _refresh_vision_box(self):
+        if not JETSON_IP:
+            self.box_vision.setText("<span style='color:#a55'>● off</span> — JETSON_IP not set")
+            return
+        s   = vision.latest()
+        age = time.time() - vision.last_ok_t if vision.last_ok_t else None
+        if not vision.is_connected():
+            err = (vision.last_error or "waiting…")[:70]
+            self.box_vision.setText(
+                f"<span style='color:#c55'>● no data</span> from {JETSON_IP}<br>"
+                f"<span style='color:#666'>{err}</span>"
+            )
+            return
+        known  = ", ".join(s.get("known_faces") or []) or "unknown"
+        gest   = ", ".join(s.get("gestures") or []) or "—"
+        expr   = ", ".join(s.get("expressions") or []) or "—"
+        dist   = s.get("nearest_person_m")
+        fps    = s.get("fps")
+        lines = [
+            f"<span style='color:#5c5'>● {vision.source}</span>"
+            f"<span style='color:#555'>  {age:.1f}s ago"
+            f"{f'  · {fps:.0f} fps' if fps else ''}</span>",
+            f"people: {s.get('face_count', 0)} ({known})"
+            f"{f'  · {dist:.1f} m' if dist is not None else ''}",
+            f"gesture: <span style='color:#ffd479'>{gest}</span>",
+            f"expr: {expr}",
+        ]
+        self.box_vision.setText("<br>".join(lines))
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
@@ -750,6 +1002,9 @@ class GladosWindow(QMainWindow):
         global renderer
         w = max(64, self.sim_label.width())
         h = max(64, self.sim_label.height())
+        # Cap to offscreen buffer size (set to 2048 at model load)
+        w = min(w, 2048)
+        h = min(h, 2048)
         renderer = mujoco.Renderer(model, height=h, width=w)
 
     def _setup_palette(self):
@@ -797,13 +1052,17 @@ class GladosWindow(QMainWindow):
         self.pipeline_bar = PipelineBar()
         root_layout.addWidget(self.pipeline_bar)
 
-        # Main row
-        row = QHBoxLayout()
-        row.setSpacing(10)
+        # Main row: sim + pipeline panel (draggable splitter)
+        row = QSplitter(Qt.Horizontal)
+        row.setHandleWidth(6)
+        row.setChildrenCollapsible(False)
+        row.setStyleSheet("QSplitter::handle { background: #1a1a1a; }")
 
-        # Sim display — interactive: left-drag rotates, right-drag pans, scroll zooms
-        sim_col = QVBoxLayout()
-        sim_col.setSpacing(3)
+        # ── Sim display ───────────────────────────────────────────────────────
+        sim_widget = QWidget()
+        sim_col = QVBoxLayout(sim_widget)
+        sim_col.setSpacing(2)
+        sim_col.setContentsMargins(0, 0, 0, 0)
 
         self.sim_label = SimView()
         self.sim_label.setMinimumSize(320, 240)
@@ -819,11 +1078,11 @@ class GladosWindow(QMainWindow):
         self.action_lbl.setStyleSheet("color: #555; background: transparent;")
         sim_col.addWidget(self.action_lbl)
 
-        row.addLayout(sim_col, stretch=1)
+        row.addWidget(sim_widget)
 
         # ── Pipeline data-flow panel ──────────────────────────────────────────
         panel = QFrame()
-        panel.setFixedWidth(320)
+        panel.setMinimumWidth(240)
         panel.setStyleSheet("background: #111; border-radius: 6px;")
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(8, 8, 8, 8)
@@ -863,10 +1122,21 @@ class GladosWindow(QMainWindow):
             a.setStyleSheet("color: #333; font-size: 12px; border: none;")
             return a
 
-        box_input_frame,  self.box_input  = _pipe_box("MIC  /  INPUT",  "#7ec8e3")
+        box_input_frame,  self.box_input  = _pipe_box("INPUT  (one JSON: heard + vision)",  "#7ec8e3", min_h=110)
         box_brain_frame,  self.box_brain  = _pipe_box("BRAIN  /  LLM",  "#f5a623", expand=True)
         box_queue_frame,  self.box_queue  = _pipe_box("TTS QUEUE",       "#ab82d4", min_h=80)
         box_speak_frame,  self.box_speak  = _pipe_box("SPEAKING",        "#4caf50")
+
+        # Live vision data — refreshed constantly, independent of turns
+        box_vision_frame, self.box_vision = _pipe_box("VISION  /  LIVE", "#2b8fcc", min_h=96)
+        self.box_vision.setFont(QFont("Menlo", 9))
+        panel_layout.addWidget(box_vision_frame)
+
+        box_sys_frame, self.box_sys = _pipe_box("SYSTEM  /  USAGE", "#888888", min_h=92)
+        self.box_sys.setFont(QFont("Menlo", 9))
+        panel_layout.addSpacing(4)
+        panel_layout.addWidget(box_sys_frame)
+        panel_layout.addWidget(_arrow())
 
         panel_layout.addWidget(box_input_frame)
         panel_layout.addWidget(_arrow())
@@ -903,7 +1173,53 @@ class GladosWindow(QMainWindow):
         panel_layout.addLayout(footer)
 
         row.addWidget(panel)
-        root_layout.addLayout(row)
+        row.setStretchFactor(0, 1)
+        row.setStretchFactor(1, 0)
+        row.setSizes([SIM_W, 320])
+
+        # Vertical splitter: (sim | pipeline) over camera
+        self.v_split = QSplitter(Qt.Vertical)
+        self.v_split.setHandleWidth(6)
+        self.v_split.setChildrenCollapsible(False)
+        self.v_split.setStyleSheet("QSplitter::handle { background: #1a1a1a; }")
+        self.v_split.addWidget(row)
+
+        # Rebuild the MuJoCo renderer when a splitter is dragged
+        row.splitterMoved.connect(lambda *_: self._resize_timer.start(150))
+        self.v_split.splitterMoved.connect(lambda *_: self._resize_timer.start(150))
+
+        # ── Camera row (full width, bottom) ───────────────────────────────────
+        cam_widget = QWidget()
+        cam_row = QVBoxLayout(cam_widget)
+        cam_row.setSpacing(0)
+        cam_row.setContentsMargins(0, 4, 0, 0)
+
+        cam_bar = QHBoxLayout()
+        cam_bar.setContentsMargins(0, 0, 0, 0)
+        cam_hdr = QLabel("JETSON CAM")
+        cam_hdr.setFont(QFont("Menlo", 8, QFont.Bold))
+        cam_hdr.setStyleSheet("color: #2b8fcc;")
+        cam_bar.addWidget(cam_hdr)
+        cam_bar.addStretch()
+        self.perception_lbl = QLabel("")
+        self.perception_lbl.setFont(QFont("Menlo", 8))
+        self.perception_lbl.setStyleSheet("color: #2b5a7a;")
+        cam_bar.addWidget(self.perception_lbl)
+        cam_row.addLayout(cam_bar)
+
+        self.cam_lbl = QLabel("waiting for Jetson stream…")
+        self.cam_lbl.setAlignment(Qt.AlignCenter)
+        # Explicit minimum so the scaled pixmap never blocks shrinking
+        self.cam_lbl.setMinimumSize(160, 120)
+        self.cam_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.cam_lbl.setStyleSheet("background: #050505; color: #333; border-radius: 4px;")
+        cam_row.addWidget(self.cam_lbl, stretch=1)
+
+        self.v_split.addWidget(cam_widget)
+        self.v_split.setStretchFactor(0, 1)
+        self.v_split.setStretchFactor(1, 1)
+        self.v_split.setSizes([SIM_H, 300])
+        root_layout.addWidget(self.v_split, stretch=1)
 
     def _connect_signals(self):
         s = self.signals
@@ -916,11 +1232,24 @@ class GladosWindow(QMainWindow):
         s.pipe_speak.connect(self._on_speak)
         s.pipe_done.connect(self._on_done)
         s.pipe_action.connect(self._on_action)
+        s.cam_frame.connect(self._on_cam_frame)
+        s.perception.connect(self.perception_lbl.setText)
 
     # ── Box update handlers ────────────────────────────────────────────────────
 
     def _on_input(self, text: str):
-        self.box_input.setText(text)
+        # text is the full JSON turn sent to the LLM — show it compactly
+        try:
+            t = json.loads(text)
+            v = t.get("vision")
+            vis = "camera offline" if v is None else json.dumps(v, separators=(",", ":"))
+            shown = (f"[{t.get('event')}]  heard: {t.get('heard') or '—'}\n"
+                     f"vision: {vis[:220]}")
+            if t.get("notes"):
+                shown += f"\nnotes: {'; '.join(t['notes'])[:120]}"
+        except Exception:
+            shown = text
+        self.box_input.setText(shown)
         self.box_brain.setText("—")
         self.box_queue.setText("—")
         self.box_speak.setText("—")
@@ -950,6 +1279,15 @@ class GladosWindow(QMainWindow):
 
     def _on_action(self, name: str):
         self.action_lbl.setText(name.replace("_", " ") if name else "")
+
+    def _on_cam_frame(self, jpg: bytes):
+        img = QImage.fromData(jpg, "JPG")
+        if img.isNull():
+            return
+        w = max(1, self.cam_lbl.width())
+        h = max(1, self.cam_lbl.height())
+        pix = QPixmap.fromImage(img).scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.cam_lbl.setPixmap(pix)
 
     def _open_admin(self):
         self.admin_console.show()
@@ -1121,6 +1459,7 @@ def shutdown():
         except Exception:
             pass
         listener = None
+    vision.stop()
     for p in reversed(procs):
         try: p.terminate()
         except Exception: pass
@@ -1134,6 +1473,7 @@ def main():
     global daemon_proc, _admin_console
 
     clear_queues()
+    vision.start()
     llama_proc  = start_proc([LLAMA_CMD, "-m", str(GGUF), "--port", "8080"], "llama-server",
                              stdout=subprocess.PIPE)
     wait_for_llama()
@@ -1149,8 +1489,11 @@ def main():
     threading.Thread(target=_llama_reader, args=(llama_proc,  signals), daemon=True, name="llama-reader").start()
     threading.Thread(target=_tts_reader,   args=(daemon_proc, signals), daemon=True, name="tts-reader").start()
 
-    threading.Thread(target=_brain_loop,   args=(signals,), daemon=True, name="brain").start()
-    threading.Thread(target=_gesture_loop, args=(signals,), daemon=True, name="gesture").start()
+    threading.Thread(target=_brain_loop,    args=(signals,), daemon=True, name="brain").start()
+    threading.Thread(target=_gesture_loop,  args=(signals,), daemon=True, name="gesture").start()
+    threading.Thread(target=_cam_feed_loop,     args=(signals,), daemon=True, name="cam-feed").start()
+    threading.Thread(target=_perception_loop,   args=(signals,), daemon=True, name="perception").start()
+    threading.Thread(target=_vision_trigger_loop, args=(signals,), daemon=True, name="vision-trigger").start()
 
     global listener
     listener = SpeechListener(

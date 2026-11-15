@@ -66,38 +66,37 @@ class Player:
     """
     Audio sink for streamed segments.
 
-    Prefers a persistent PortAudio stream so consecutive segments run together
-    with no gap — spawning afplay per segment would put an audible seam between
-    every phrase. Falls back to the subprocess player if PortAudio is missing
-    or no output device is available.
+    Uses sounddevice on macOS so playback always follows the current system
+    default output device (AirPods, speakers, etc.) — no restart needed when
+    you switch audio devices. Falls back to afplay/aplay subprocess if
+    sounddevice is unavailable.
     """
 
     def __init__(self):
-        self._stream = None
-        self._pa     = None
+        self._sd = None
         try:
-            import pyaudio
-            self._pa = pyaudio.PyAudio()
-            self._stream = self._pa.open(
-                format=pyaudio.paFloat32, channels=1,
-                rate=SAMPLE_RATE, output=True,
-            )
-            self.backend = "PortAudio (gapless)"
+            import sounddevice as _sd
+            self._sd = _sd
+            self.backend = "sounddevice (follows system default)"
         except Exception as e:
-            self.backend = f"{' '.join(AUDIO_PLAYER)} (PortAudio unavailable: {e})"
+            self.backend = f"{' '.join(AUDIO_PLAYER)} (sounddevice unavailable: {e})"
 
     def play(self, audio) -> None:
-        if self._stream is None:
-            play_via_subprocess(audio)
-            return
-        self._stream.write(np.ascontiguousarray(audio.numpy(), dtype=np.float32).tobytes())
+        data = np.ascontiguousarray(audio.numpy(), dtype=np.float32)
+        if self._sd is not None:
+            try:
+                self._sd.play(data, samplerate=SAMPLE_RATE, blocking=True)
+                return
+            except Exception:
+                pass   # fall through to subprocess
+        play_via_subprocess(audio)
 
     def close(self) -> None:
-        if self._stream is not None:
-            self._stream.stop_stream()
-            self._stream.close()
-        if self._pa is not None:
-            self._pa.terminate()
+        if self._sd is not None:
+            try:
+                self._sd.stop()
+            except Exception:
+                pass
 
 
 def speak_request(tts: GladosTTS, player: Player, req: dict) -> None:

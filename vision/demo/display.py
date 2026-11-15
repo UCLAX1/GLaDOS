@@ -26,6 +26,7 @@ import cv2
 import numpy as np
 
 from workers import boxes_contain
+import sysstats
 
 PANEL_W = 430
 FONT = cv2.FONT_HERSHEY_SIMPLEX
@@ -216,6 +217,7 @@ class Compositor:
                             "hz": round(w.hz, 1),
                             "ms": round(w.ms), "message": w.error or w.message} for k, w in self.w.items()},
             "people": [{k: v for k, v in p.items() if k != "box"} for p in self.people],
+            "system": sysstats.snapshot(),
         }
 
 

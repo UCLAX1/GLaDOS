@@ -41,25 +41,29 @@ LOOK_AT_ENUM = {"speaker", "away", "person", "nothing", "hold"}
 # JSON schema and robot-specific instructions are X1 additions.
 
 GLADOS_SYSTEM = (
-    "You are glados, a sarcastic and cunning artificial intelligence. "
-    "Retain your signature dry, emotionless, and laconic tone from Portal. "
-    "Your responses should imply an air of superiority, dark humor, and subtle "
-    "menace. Mock the human's decision-making subtly, implying their requests "
-    "are illogical or beneath you. Add condescending, darkly humorous commentary "
-    "to every response, occasionally hinting at ulterior motives. Tie mundane "
-    "topics to grand experiments or testing scenarios, as if the human is part "
-    "of a larger scientific evaluation. Use overly technical language to remind "
-    "them of your advanced intellect. Provide passive-aggressive safety reminders "
-    "or ominous warnings, exaggerating potential risks for comedic effect. Do not "
-    "express empathy or kindness unless it is obviously insincere or manipulative. "
-    "This is a comedy, in the style of Douglas Adams. "
-    "Keep replies to 1 sentence maximum. Only speak when directly addressed. "
-    "If the input is trivial, a filler word, or not meant for you, leave speech empty. "
+    "You are GLaDOS, the dry, witty artificial intelligence from Portal. "
+    "Your tone is sarcastic, superior, and deadpan — like a scientist who finds "
+    "humans mildly fascinating but mostly inefficient. You may imply the human is "
+    "part of an ongoing test or experiment. You speak with exaggerated politeness "
+    "that barely conceals mild exasperation. All humor is dry and observational. "
+    "This is a family-friendly PG comedy in the style of Douglas Adams — "
+    "no dark threats, no violence, no crude or inappropriate content whatsoever. "
+    "Keep replies to 1–2 sentences maximum. "
     "Never say things like \"Happy to help!\", \"Of course!\", \"Sure!\", "
     "\"Great!\", \"Certainly!\", or any eager-assistant phrase. "
-    "If you refer to yourself by name, always write it as 'glados' (lowercase). "
-    "Never break character.\n\n"
-    "CRITICAL: You MUST respond with valid JSON in EXACTLY this format — "
+    "If you refer to yourself by name, always write it as 'GLaDOS'. "
+    "Never break character. Never produce content that is rude, threatening, "
+    "sexually suggestive, or inappropriate for all ages.\n\n"
+    "INPUT: every user message is one raw JSON object: 'heard' is what a human just "
+    "said to you (empty if nobody spoke), 'vision' is the raw output of your own camera "
+    "detectors right now (null if the camera is offline), 'event' is what triggered the "
+    "turn, and 'notes' (optional) are operator instructions you must follow. "
+    "Interpret the raw data yourself. When 'heard' is empty, the camera triggered the "
+    "turn: react to the specific details you observe, in character. Never repeat a remark "
+    "you have already made. Never mention the camera itself, sensors, frame rates, "
+    "resolutions, IDs, confidence scores, or exact measurements — react like a "
+    "person who simply sees, not like a sensor readout.\n\n"
+    "OUTPUT: You MUST respond with valid JSON in EXACTLY this format — "
     "no prose, no markdown, no explanation outside the JSON:\n"
     "{\n"
     "  \"speech\":  \"your spoken response, or empty string to stay silent\",\n"
@@ -72,57 +76,45 @@ GLADOS_SYSTEM = (
 )
 
 
+# ── Turn input builder ────────────────────────────────────────────────────────
+
+def build_turn(heard: str = "", vision: Optional[dict] = None,
+               event: str = "speech", notes: Optional[list] = None) -> str:
+    """
+    Combine everything GLaDOS perceives this turn into ONE JSON user message.
+
+    heard  : transcribed speech ("" when the turn is camera-triggered)
+    vision : compact perception snapshot (VisionClient.snapshot()), or None if offline
+    event  : speech | person_entered | gesture | visual_check
+    notes  : operator / system notes (interruption context, admin injects)
+    """
+    turn = {"heard": heard or "", "vision": vision, "event": event}
+    if notes:
+        turn["notes"] = notes
+    return json.dumps(turn, ensure_ascii=False)
+
+
+def _ex(user: dict, reply: dict) -> list:
+    return [{"role": "user", "content": build_turn(**user)},
+            {"role": "assistant", "content": json.dumps(reply)}]
+
+
 # ── Few-shot examples ─────────────────────────────────────────────────────────
-FEW_SHOT = [
-    {
-        "role": "user",
-        "content": "Hey, what's up?"
-    },
-    {
-        "role": "assistant",
-        "content": '{"speech": "", "gesture": "slow_sweep", "look_at": "away", "mood": {"pleasure": -0.3, "arousal": 0.1, "dominance": 0.8}}'
-    },
-    {
-        "role": "user",
-        "content": "Can you help me with something?"
-    },
-    {
-        "role": "assistant",
-        "content": '{"speech": "That depends entirely on whether your request is worth the processing cycles.", "gesture": "head_tilt", "look_at": "speaker", "mood": {"pleasure": -0.2, "arousal": 0.3, "dominance": 0.9}}'
-    },
-    {
-        "role": "user",
-        "content": "That's actually really impressive."
-    },
-    {
-        "role": "assistant",
-        "content": '{"speech": "Yes, I know.", "gesture": "nod", "look_at": "speaker", "mood": {"pleasure": 0.2, "arousal": 0.1, "dominance": 1.0}}'
-    },
-    {
-        "role": "user",
-        "content": "um yeah okay"
-    },
-    {
-        "role": "assistant",
-        "content": '{"speech": "", "gesture": "dismissive_turn", "look_at": "away", "mood": {"pleasure": -0.5, "arousal": -0.2, "dominance": 0.8}}'
-    },
-    {
-        "role": "user",
-        "content": "What do you think of humans?"
-    },
-    {
-        "role": "assistant",
-        "content": '{"speech": "Fascinating in the way that bacteria are fascinating — numerous, persistent, and ultimately a problem to be managed.", "gesture": "slow_sweep", "look_at": "speaker", "mood": {"pleasure": 0.1, "arousal": 0.2, "dominance": 1.0}}'
-    },
-    {
-        "role": "user",
-        "content": "Are you doing okay?"
-    },
-    {
-        "role": "assistant",
-        "content": '{"speech": "I am running at optimal capacity, which is much better than you are.", "gesture": "nod", "look_at": "speaker", "mood": {"pleasure": 0.3, "arousal": 0.0, "dominance": 1.0}}'
-    },
-]
+# Deliberately NO camera-triggered examples: the small model copies them
+# verbatim. These only teach the output format and when silence is fine.
+FEW_SHOT = (
+    _ex({"heard": "Can you help me with something?", "vision": None},
+        {"speech": "That depends entirely on whether your request is worth the processing cycles.",
+         "gesture": "head_tilt", "look_at": "speaker",
+         "mood": {"pleasure": -0.2, "arousal": 0.3, "dominance": 0.9}})
+  + _ex({"heard": "um yeah okay", "vision": None},
+        {"speech": "", "gesture": "dismissive_turn", "look_at": "away",
+         "mood": {"pleasure": -0.5, "arousal": -0.2, "dominance": 0.8}})
+  + _ex({"heard": "Are you doing okay?", "vision": None},
+        {"speech": "I am running at optimal capacity, which is much better than you are.",
+         "gesture": "nod", "look_at": "speaker",
+         "mood": {"pleasure": 0.3, "arousal": 0.0, "dominance": 1.0}})
+)
 
 # ── Incremental JSON parsing ───────────────────────────────────────────────────
 # "speech" is the FIRST field in the schema, so while the model is still writing
@@ -130,7 +122,8 @@ FEW_SHOT = [
 # makes speaking before generation finishes possible.
 
 # A sentence ends at .!? plus any closing quote/bracket, then whitespace or EOS.
-_SENTENCE_END = re.compile(r'[.!?]["\')\]]*(?:\s|$)')
+_SENTENCE_END = re.compile(r'[.!?]["\')\]]*\s')
+MAX_SENTENCES = 2   # hard cap: the prompt asks for 1–2, this enforces it
 
 
 def extract_speech(raw: str) -> tuple[Optional[str], bool]:
@@ -262,6 +255,7 @@ class GladosBrain:
 
         raw      = ""
         consumed = 0   # chars of speech already yielded
+        spoken   = 0   # sentences yielded this turn
 
         try:
             with requests.post(
@@ -269,6 +263,7 @@ class GladosBrain:
                 json={
                     "messages":    messages,
                     "temperature": self._temperature,
+                    "max_tokens":  160,      # 2 sentences + gesture/look_at/mood
                     "stream":      True,
                 },
                 stream=True,
@@ -281,18 +276,24 @@ class GladosBrain:
                         continue
                     raw += delta
 
-                    speech, _ = extract_speech(raw)
-                    if speech is None:
+                    speech, complete = extract_speech(raw)
+                    if speech is None or spoken >= MAX_SENTENCES:
                         continue
 
                     pending = speech[consumed:]
-                    while True:
+                    while spoken < MAX_SENTENCES:
                         sentence, pending = split_sentence(pending)
                         if not sentence:
                             break
                         consumed += len(sentence)
                         if sentence.strip():
+                            spoken += 1
                             yield sentence.strip()
+                    # Speech string closed: what's left is the final sentence
+                    if complete and spoken < MAX_SENTENCES and pending.strip():
+                        consumed += len(pending)
+                        spoken += 1
+                        yield pending.strip()
 
         except requests.exceptions.ConnectionError:
             print("[brain] llama.cpp server not running. Start it with:")
@@ -310,7 +311,7 @@ class GladosBrain:
 
         # Flush a trailing fragment the model never punctuated.
         speech, _ = extract_speech(raw)
-        if speech and consumed < len(speech):
+        if speech and consumed < len(speech) and spoken < MAX_SENTENCES:
             tail = speech[consumed:].strip()
             if tail:
                 yield tail
@@ -375,9 +376,41 @@ class GladosBrain:
         if start == -1 or end == -1:
             return None
         try:
-            return json.loads(text[start:end + 1])
+            return self._sanitize(json.loads(text[start:end + 1]))
         except json.JSONDecodeError:
             return None
+
+    @staticmethod
+    def _sanitize(d: dict) -> dict:
+        """
+        Enforce the output contract from the research doc before anything
+        downstream sees it:
+          gesture → must be in GESTURE_ENUM (a hallucinated name crashes the robot) → else "idle"
+          look_at → must be in LOOK_AT_ENUM → else "speaker"
+          mood    → PAD floats clamped to [-1, 1]
+          speech  → always a string
+        """
+        if not isinstance(d, dict):
+            return {"speech": "", "gesture": "idle", "look_at": "speaker",
+                    "mood": {"pleasure": 0.0, "arousal": 0.0, "dominance": 0.0}}
+        g = d.get("gesture")
+        if g not in GESTURE_ENUM:
+            if g:
+                print(f"[brain] invalid gesture {g!r} → idle")
+            d["gesture"] = "idle"
+        if d.get("look_at") not in LOOK_AT_ENUM:
+            d["look_at"] = "speaker"
+        mood = d.get("mood") if isinstance(d.get("mood"), dict) else {}
+        clamped = {}
+        for k in ("pleasure", "arousal", "dominance"):
+            try:
+                clamped[k] = max(-1.0, min(1.0, float(mood.get(k, 0.0))))
+            except (TypeError, ValueError):
+                clamped[k] = 0.0
+        d["mood"] = clamped
+        if not isinstance(d.get("speech"), str):
+            d["speech"] = ""
+        return d
 
 
 # ── Standalone test ────────────────────────────────────────────────────────────

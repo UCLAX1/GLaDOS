@@ -25,21 +25,18 @@ cleanup() {
 }
 trap cleanup INT TERM
 
-# vision demo (browser stream)
-echo "[1/2] Starting vision demo on :$WEB_PORT..."
+# vision demo — owns the ZED, serves the video (/stream) AND the perception
+# data (/status) that the Mac's VisionClient polls. vision_server.py is no
+# longer started: it would fight the demo for the camera and see nothing.
+echo "[1/1] Starting vision demo on :$WEB_PORT..."
 $VENV vision/demo/run_demo.py --source zed --no-window --web $WEB_PORT &
 DEMO_PID=$!
-sleep 5   # let ZED open before the perception server tries
-
-# perception server (Mac polls this)
-echo "[2/2] Starting perception server on :5555..."
-python3 vision/vision_server.py &
-SERVER_PID=$!
+SERVER_PID=""
 
 echo ""
-echo "  Camera stream: http://$(hostname -I | awk '{print $1}'):$WEB_PORT"
-echo "  Perception API: http://$(hostname -I | awk '{print $1}'):5555/perception"
+echo "  Camera stream:  http://$(hostname -I | awk '{print $1}'):$WEB_PORT/stream"
+echo "  Perception API: http://$(hostname -I | awk '{print $1}'):$WEB_PORT/status"
 echo "  Ctrl-C to stop."
 echo ""
 
-wait $DEMO_PID $SERVER_PID
+wait $DEMO_PID
