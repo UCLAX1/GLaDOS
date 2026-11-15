@@ -20,19 +20,28 @@
         <geom name="shoulder_stud" type="box" fromto="0 0 0 0 0 -0.1" size="0.025"/>
 
         <body name="shoulder" pos="0 0 -0.15">
-          <joint name="shoulder_joint" type="hinge" pos="0 0 0" axis="1 0 0"/>
+          <joint name="shoulder_joint" type="hinge" pos="0 0 0" axis="1 0 0" damping="0.1"/>
           <geom name="shoulder_rod" type="box" fromto="0 0 0 0 0 -0.720" size="0.025"/>
 
           <body name="elbow" pos="0 0 -0.770">
-            <joint name="elbow_joint" type="hinge" pos="0 0 0" axis="1 0 0"/>
+            <joint name="elbow_joint" type="hinge" pos="0 0 0" axis="1 0 0" damping="0.1"/>
             <geom name="elbow_rod" type="box" fromto="0 0 0 0 0 -0.480" size="0.025"/>
 
-            <body name="head" pos="0 0 -0.680">
-              <joint name="head_joint" type="ball" pos="0 0 0.16" axis="1 0 0"/>
-              <geom name="head_geom" type="cylinder" size="0.127 0.05" euler="0 90 0"/>
-              <geom name="eye_geom" type="cylinder" pos="0 0 -0.13" size="0.015 0.005" rgba="1 1 0 1"/>
+            <body name="platform" pos="0 0 -0.560">
+              <!-- <joint name="head_ball_joint" type="ball" pos="0 0 0" damping="0.03" limited="true" range="0 0.7"/> -->
+              <!-- <joint name="z_joint" type="hinge" pos="0 0 0.09" axis="0 0 1" damping="0.005"/> -->
+              <joint name="x_joint" type="hinge" pos="0 0 0.00" axis="1 0 0" damping="0.005"/>
+              <joint name="y_joint" type="hinge" pos="0 0 0.00" axis="0 1 0" damping="0.005"/>
+              <joint name="z_joint" type="hinge" pos="0 0 0.00" axis="0 0 1" damping="0.005"/>
+              <geom name="platform_box" type="cylinder" fromto="0 0 0 0 0 0.01" size="0.08" contype="0" conaffinity="0"/>
+
+              <body name="head" pos="0 0 -0.13">
+                <geom name="head_geom" type="cylinder" size="0.127 0.05" euler="0 90 0" mass="0.2"/>
+                <geom name="eye_geom" type="cylinder" pos="0 0 -0.13" size="0.015 0.005" rgba="1 1 0 1"/>
+              </body>
 
             </body>
+
           </body>
         </body>
     </body>
@@ -48,17 +57,20 @@
   </tendon>
 
   <actuator>
-    <position name="shoulder_motor" joint="shoulder_joint" kp="80" dampratio="1" ctrlrange="-1.57 1.57"/>
-    <position name="elbow_motor" joint="elbow_joint" kp="80" dampratio="1" ctrlrange="-1.57 1.57"/>
-    <position name="head_motor" joint="head_joint"/>
-    <!-- <position name="head_motor" joint="head_joint" kp="80" dampratio="1" ctrlrange="-1.57 1.57"/> -->
+    <position name="shoulder_motor" joint="shoulder_joint" kp="2000" dampratio="1" ctrlrange="-1.57 1.57"/>
+    <position name="elbow_motor" joint="elbow_joint" kp="500" dampratio="1" ctrlrange="-1.57 1.57"/>
+    <position name="x_motor" joint="x_joint" kp="20" dampratio="1" ctrlrange="-1.57 1.57"/>
+    <position name="y_motor" joint="y_joint" kp="20" dampratio="1" ctrlrange="-1.57 1.57"/>
+    <position name="z_motor" joint="z_joint" kp="20" dampratio="1" ctrlrange="-1.57 1.57"/>
 
-    <!-- <general name="theta_slider" joint="servo_group_hinge_a" gainprm="0" ctrllimited="true" ctrlrange="-180 180"/>
-    <general name="phi_slider" joint="servo_group_hinge_a" gainprm="0" ctrllimited="true" ctrlrange="180 120"/> -->
+
+    <general name="theta_slider" joint="shoulder_joint" gainprm="0" ctrllimited="true" ctrlrange="-180 180"/>
+    <general name="phi_slider" joint="shoulder_joint" gainprm="0" ctrllimited="true" ctrlrange="135 180"/>
 
   </actuator>
 
   <contact>
+    <exclude body1="elbow" body2="platform"/>
     <!-- <exclude body1="group_a" body2="platform_and_sites"/>
     <exclude body1="group_b" body2="platform_and_sites"/>
     <exclude body1="group_c" body2="platform_and_sites"/> -->

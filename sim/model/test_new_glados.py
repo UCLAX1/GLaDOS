@@ -1,6 +1,6 @@
 import time
 import numpy as np
-import quaternion
+from scipy.spatial.transform import Rotation as R
 
 import mujoco
 import mujoco.viewer
@@ -12,13 +12,13 @@ import mujoco.viewer
 # https://raw.org/research/inverse-kinematics-of-a-stewart-platform/
 
 # https://quaternion.readthedocs.io/en/latest/quaternion/#quaternion.rotate_vectors
-def rotate_vector_by_quat(v: np.ndarray, q: np.quaternion):
-  q_float_array = quaternion.as_float_array(q)
-  s = q_float_array[0] # scalar part
-  r = q_float_array[1:] # vector part
-  m = np.sum(q_float_array**2) # sum of squares
+# def rotate_vector_by_quat(v: np.ndarray, q: np.quaternion):
+#   q_float_array = quaternion.as_float_array(q)
+#   s = q_float_array[0] # scalar part
+#   r = q_float_array[1:] # vector part
+#   m = np.sum(q_float_array**2) # sum of squares
 
-  return v + 2 * np.cross(r, s*v + np.cross(r, v)) / m
+#   return v + 2 * np.cross(r, s*v + np.cross(r, v)) / m
 
 def pol2cart(r, theta):
   return r * np.array([np.cos(theta), np.sin(theta)])
@@ -30,6 +30,13 @@ class Glados:
     """init function
 
     """
+
+    # motor angles
+    self.shoulder_angle = 0.0
+    self.elbow_angle = 0.0
+
+    # normal vector of the head relative to the ELBOW
+    self.head_normal: np.ndarray = np.array([0.0, 0.0, -1.0])
 
   def find_motor_angles(
     self,
@@ -44,22 +51,51 @@ d = mujoco.MjData(m)
 
 # theta and phi of the normal angle (radians)
 theta = 0.0
-phi = 0.0
+phi = np.pi
 
-# servo vals in radians
-# this function shouldn't be modified
-# def move_motors(model, data):
-#   motor_a_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "motor_a") # 0 degrees (270 in mujoco)
-#   motor_b_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "motor_b") # 120 degrees (30 in mujoco)
-#   motor_c_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "motor_c")  # 240 degrees, along x axis (150 in mujoco)
 
-#   # data.ctrl[motor_a_id] = np.rad2deg(motor_0_val)
-#   # data.ctrl[motor_b_id] = np.rad2deg(motor_1_val)
-#   # data.ctrl[motor_c_id] = np.rad2deg(motor_2_val)
+# temporary function, will implement as a pid loop later
+# motor values between -pi/2 and pi/2 radians
+def move_arm(model, data, shoulder_angle, elbow_angle):
+  shoulder_motor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "shoulder_motor")
+  elbow_motor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "elbow_motor")
 
-#   data.ctrl[motor_a_id] = motor_0_val
-#   data.ctrl[motor_b_id] = motor_1_val
-#   data.ctrl[motor_c_id] = motor_2_val
+  data.ctrl[shoulder_motor_id] = shoulder_angle
+  data.ctrl[elbow_motor_id] = elbow_angle
+
+def move_head(model, data, target_normal_vector):
+
+  base_vector = np.array([0, 0, -1])
+
+  axis_vector = np.cross(base_vector, target_normal_vector)
+
+  sin_value = np.linalg.norm(axis_vector)
+  if (sin_value == 0):
+    axis_vector = np.array([0, 0, 0])
+  else:
+    angle = np.arcsin(sin_value)
+    axis_vector = (axis_vector / sin_value) * angle
+
+  # print(axis_vector)
+
+  r = R.from_rotvec(axis_vector)
+
+  euler_angles = r.as_euler("zyx", degrees=False)
+  x_angle = euler_angles[2]
+  y_angle = euler_angles[1]
+  z_angle = euler_angles[0]
+  # print(euler_angles)
+
+  # # ROTATION MATRIX: zyx
+
+  x_motor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "x_motor")
+  y_motor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "y_motor")
+  z_motor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "z_motor")
+
+  data.ctrl[x_motor_id] = x_angle
+  data.ctrl[y_motor_id] = y_angle
+  data.ctrl[z_motor_id] = z_angle
+
 
 
 with mujoco.viewer.launch_passive(m, d) as viewer:
@@ -87,13 +123,17 @@ with mujoco.viewer.launch_passive(m, d) as viewer:
 
     # mujoco.mj_kinematics(m, d)
 
-    # theta_slider_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, "theta_slider")
-    # phi_slider_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, "phi_slider")
+    theta_slider_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, "theta_slider")
+    phi_slider_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_ACTUATOR, "phi_slider")
 
-    # theta = np.deg2rad(d.ctrl[theta_slider_id])
-    # phi = np.deg2rad(d.ctrl[phi_slider_id])
+    theta = np.deg2rad(d.ctrl[theta_slider_id])
+    phi = np.deg2rad(d.ctrl[phi_slider_id])
 
     target_normal_vector = np.array([np.cos(theta) * np.sin(phi), np.sin(theta) * np.sin(phi), np.cos(phi)])
+
+    move_head(m, d, target_normal_vector)
+
+    # target_normal_vector = np.array([np.cos(theta) * np.sin(phi), np.sin(theta) * np.sin(phi), np.cos(phi)])
 
     # motor_angles = glados.find_motor_angles()
     # move_motors(m, d, *motor_angles)
