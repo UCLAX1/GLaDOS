@@ -1,0 +1,10 @@
+# Installed by setup_demo.py (torch comes first, from the CPU index on Linux/Windows).
+# The Jetson (aarch64) only has a working MediaPipe wheel at 0.10.18.
+mediapipe==0.10.18; platform_machine == "aarch64"
+mediapipe==0.10.21; platform_machine != "aarch64"
+numpy<2
+onnxruntime
+insightface==0.7.3
+hsemotion-onnx==0.3.1
+ultralytics==8.4.196
+lap

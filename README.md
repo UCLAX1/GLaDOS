@@ -6,13 +6,21 @@ UCLA X1's 2026-2027 GLaDOS project.
 
 ### Option A — GUI (recommended)
 
-One command starts everything: llama-server, the speech daemon, the listener, and
-the MuJoCo sim in a single PySide6 window.
+Same two commands on every machine — the scripts detect which one they are on.
 
 ```bash
-source listening/venv/bin/activate
-python3 gui_launch.py
+./setup.sh      # once: installs everything this machine needs   (Windows: setup.bat)
+./start.sh      # every time                                     (Windows: start.bat)
 ```
+
+| Machine | What `./start.sh` runs |
+|---|---|
+| **Jetson** (start first) | camera + vision; serves video and what it sees on `:8081` |
+| **Mac / Windows PC** | llama-server, speech daemon, listener, MuJoCo sim and the GUI, reading vision from the Jetson |
+
+The Mac looks for the Jetson at `100.73.92.3`; override with `JETSON_IP=<ip> ./start.sh`
+(`JETSON_IP=none` runs without vision). On Windows use `set JETSON_IP=<ip>` before `start.bat`;
+`start.bat vision` runs the camera demo on the PC itself if there is no Jetson.
 
 ### Option B — Headless (three terminals)
 
@@ -47,7 +55,9 @@ per-stage distribution over the session.
 ## Structure
 
 ```
-gui_launch.py           all-in-one GUI launcher (recommended)
+setup.sh / start.sh     one-command setup and start (Mac and Jetson; .bat versions for Windows)
+gui_launch.py           all-in-one GUI (what start.sh runs on the Mac)
+pipeline.py             turn manager: early start, merging, barge-in, cancel
 run_glados.py           headless pipeline entry point
 │
 ├── listening/

@@ -1,0 +1,13 @@
+# Requires Python 3.9-3.12: mediapipe 0.10.21 is the last release with the
+# legacy mp.solutions API (used by gestures.py and expression.py) and has no
+# wheels for newer Python versions.
+mediapipe==0.10.21
+numpy<2
+opencv-python
+insightface==2.1
+onnxruntime
+# object_tracker.py relies on this version's nms= argument to pick YOLO26's
+# NMS-free head, so this is pinned
+ultralytics==8.4.196
+# ByteTrack's matching solver; ultralytics installs it on first use otherwise
+lap

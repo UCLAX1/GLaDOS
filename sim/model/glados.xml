@@ -48,7 +48,7 @@
                   <site name="head_mount" pos="0 0 -${L2}" size="0.01" rgba="1 0 0 1"/>
 
                 <!--
-                  Push-rod platform - 0.23m (L2) below lower arm.
+                  Push-rod platform — 0.23m (L2) below elbow.
                   Both tilt joints (neck = side tilt, head = nod) share this single pivot point,
                   The head/eye assembly hangs below this pivot by the rod length.
                 -->

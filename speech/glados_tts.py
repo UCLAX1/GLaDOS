@@ -74,6 +74,12 @@ def normalize_numbers(text: str) -> str:
     return re.sub(r"\b\d+\b", lambda m: p.number_to_words(m.group()), text)
 
 
+def normalize_name(text: str) -> str:
+    """The voice only pronounces her name correctly in lowercase: any casing of
+    "GLaDOS" (GLaDOS, Glados, GLADOS, GLaDOS's …) becomes "glados"."""
+    return re.sub(r"glados", "glados", text, flags=re.IGNORECASE)
+
+
 # ── weight_norm format conversion ─────────────────────────────────────────
 def _convert_weight_norm(state_dict: dict) -> dict:
     """
@@ -126,7 +132,8 @@ class GladosTTS:
 
         # torch.compile gives ~20-40% speedup after the first inference
         # (disabled on MPS — not yet fully supported)
-        if self.device != "mps":
+        import sys
+        if self.device != "mps" and sys.platform != "win32":   # Windows: needs MSVC, skip
             try:
                 self.kmodel = torch.compile(self.kmodel)
             except Exception:
@@ -150,7 +157,7 @@ class GladosTTS:
         whole utterance. KPipeline already segments internally — this just stops
         throwing that away, so playback can start on the first segment.
         """
-        text = normalize_numbers(text)
+        text = normalize_numbers(normalize_name(text))
         for _, _, audio in self.pipeline(text, voice=self.voice, speed=speed):
             yield audio.clamp(-1.0, 1.0)
 

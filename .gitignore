@@ -110,5 +110,11 @@ test*.wav
 
 #sim
 videos/
-sim/F_I_K/arm/README.md
-sim/F_I_K/push_rod/README.md
+# vision demo: venv and downloaded model weights
+vision/demo/.venv/
+vision/demo/models/
+vision/face_detector.tflite
+vision/gesture_eval/recordings/
+
+# llama-server downloaded by setup.bat
+tools/llama/
