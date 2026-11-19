@@ -333,30 +333,62 @@ def _usage_loop():
         time.sleep(2)
 
 
+# Latest-frame mailbox between the camera thread and the GUI. Emitting every
+# frame as a Qt event lets them queue up whenever the GUI is slower than the
+# camera: the video falls further and further behind and every other GUI event
+# waits behind the backlog. Instead the worker decodes and scales off the GUI
+# thread, keeps only the newest frame, and pings the GUI only when it has
+# picked up the previous one.
+_cam_lock    = threading.Lock()
+_cam_latest  = None            # QImage, already scaled to the label
+_cam_pending = False           # a ping is queued and not yet handled
+_cam_target  = (960, 540)      # label size, updated by the GUI on resize
+CAM_MAX_FPS  = 20
+
+
 def _cam_feed_loop(signals):
-    """Pull MJPEG frames from the Jetson demo stream and emit as raw JPEG bytes."""
+    """Pull MJPEG frames from the Jetson; deliver only the newest, ready to paint."""
+    global _cam_latest, _cam_pending
     if not JETSON_IP:
         return
     url = f"http://{JETSON_IP}:{os.environ.get('VISION_DEMO_PORT', '8081')}/stream"
-    buf = b""
     while True:
+        buf = b""
         try:
             req = urllib.request.urlopen(url, timeout=5)
+            t_last = 0.0
             while True:
-                chunk = req.read(4096)
+                chunk = req.read(65536)
                 if not chunk:
                     break
                 buf += chunk
-                # Scan for JPEG start/end markers
-                s = buf.find(b"\xff\xd8")
-                e = buf.find(b"\xff\xd9", s + 2) if s != -1 else -1
-                if s != -1 and e != -1:
-                    signals.cam_frame.emit(buf[s:e + 2])
-                    buf = buf[e + 2:]
-                    if len(buf) > 1 << 20:   # safety: drop if buffer bloats
+                # Skip to the NEWEST complete frame in the buffer
+                e = buf.rfind(b"\xff\xd9")
+                if e == -1:
+                    if len(buf) > 4 << 20:
                         buf = b""
+                    continue
+                s_ = buf.rfind(b"\xff\xd8", 0, e)
+                if s_ == -1:
+                    buf = buf[e + 2:]
+                    continue
+                jpg, buf = buf[s_:e + 2], buf[e + 2:]
+                now = time.time()
+                if now - t_last < 1.0 / CAM_MAX_FPS:
+                    continue
+                t_last = now
+                img = QImage.fromData(jpg, "JPG")
+                if img.isNull():
+                    continue
+                w, h = _cam_target
+                img = img.scaled(max(1, w), max(1, h), Qt.KeepAspectRatio, Qt.FastTransformation)
+                with _cam_lock:
+                    _cam_latest = img
+                    ping = not _cam_pending
+                    _cam_pending = True
+                if ping:
+                    signals.cam_frame.emit(b"")
         except Exception:
-            buf = b""
             time.sleep(2)
 
 
@@ -474,7 +506,7 @@ class Signals(QObject):
     pipe_done   = Signal()           # finished speaking
     pipe_action = Signal(str)        # current gesture/action name
     # camera
-    cam_frame   = Signal(bytes)      # raw JPEG bytes from Jetson MJPEG stream
+    cam_frame   = Signal(bytes)      # "new camera frame ready" ping (frame is in _cam_latest)
     perception  = Signal(str)        # latest perception context string
 
 # ── Pipeline bar ──────────────────────────────────────────────────────────────
@@ -808,6 +840,11 @@ class AdminConsole(QDialog):
         sec6, lay6 = _section("RAW LOG")
         self.raw_log = QTextEdit()
         self.raw_log.setReadOnly(True)
+        self.raw_log.document().setMaximumBlockCount(1500)   # keep it from growing forever
+        self._log_buf: list[str] = []
+        self._log_timer = QTimer(self)
+        self._log_timer.timeout.connect(self._flush_log)
+        self._log_timer.start(200)
         self.raw_log.setFont(QFont(MONO, 8))
         self.raw_log.setStyleSheet(
             "background: #0a0a0a; color: #555; border: 1px solid #222; border-radius: 3px;"
@@ -908,11 +945,18 @@ class AdminConsole(QDialog):
         self._log_line.emit(line)
 
     def _append_log(self, line: str):
+        self._log_buf.append(line)            # painted in batches by _flush_log
+
+    def _flush_log(self):
+        if not self._log_buf:
+            return
+        lines, self._log_buf = self._log_buf[-500:], []
         cur = self.raw_log.textCursor()
         cur.movePosition(QTextCursor.End)
-        self.raw_log.setTextCursor(cur)
-        self.raw_log.insertPlainText(line + "\n")
-        self.raw_log.ensureCursorVisible()
+        cur.insertText("\n".join(lines) + "\n")
+        if self.isVisible():
+            self.raw_log.setTextCursor(cur)
+            self.raw_log.ensureCursorVisible()
 
     def _sync_inject(self, *_):
         """Mirror the inject box into plain globals the brain thread can read safely."""
@@ -1321,14 +1365,13 @@ class GladosWindow(QMainWindow):
     def _on_action(self, name: str):
         self.action_lbl.setText(name.replace("_", " ") if name else "")
 
-    def _on_cam_frame(self, jpg: bytes):
-        img = QImage.fromData(jpg, "JPG")
-        if img.isNull():
-            return
-        w = max(1, self.cam_lbl.width())
-        h = max(1, self.cam_lbl.height())
-        pix = QPixmap.fromImage(img).scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        self.cam_lbl.setPixmap(pix)
+    def _on_cam_frame(self, _unused: bytes = b""):
+        global _cam_pending, _cam_target
+        with _cam_lock:
+            img, _cam_pending = _cam_latest, False
+        _cam_target = (self.cam_lbl.width(), self.cam_lbl.height())
+        if img is not None:
+            self.cam_lbl.setPixmap(QPixmap.fromImage(img))
 
     def _open_admin(self):
         self.admin_console.show()
@@ -1400,7 +1443,7 @@ def _llama_reader(proc: subprocess.Popen, signals: "Signals"):
     for raw in proc.stdout:
         line = raw.decode(errors="replace").rstrip()
         print(line)
-        if _admin_console is not None:
+        if _admin_console is not None and (" E " in line or "error" in line.lower()):
             _admin_console.push_log(line)
         m = pat_timing.search(line)
         if m:
@@ -1429,6 +1472,9 @@ def _llama_reader(proc: subprocess.Popen, signals: "Signals"):
             signals.metrics.emit("llm", f"llm  prefill {prefill}  gen {gen}  {total}  [{hit_pct}]")
 
 
+_tts_ready = threading.Event()   # set when the speech daemon has loaded its model
+
+
 def _tts_reader(proc: subprocess.Popen, signals: "Signals"):
     """Forward the speech daemon's events ([speak-start] …) to the pipeline."""
     import json as _json
@@ -1436,6 +1482,8 @@ def _tts_reader(proc: subprocess.Popen, signals: "Signals"):
         line = raw.decode(errors="replace").rstrip()
         print(line)
         _log(line)
+        if line.startswith("GLaDOS daemon ready"):
+            _tts_ready.set()
         if not line.startswith("["):
             continue
         tag, _, rest = line[1:].partition("] ")
@@ -1534,8 +1582,16 @@ def main():
         model_final="distil-small.en",
         gap_chunks=GAP_MS // 32,
     )
-    threading.Thread(target=listener.start, daemon=True, name="listener").start()
-    signals.status.emit("listening")
+    def _start_listening():
+        # Speaking before the voice is loaded would make the first reply wait
+        # for the model load (seconds). Hold the mic until it is ready.
+        if not _tts_ready.wait(timeout=120):
+            print("[launch] speech daemon not ready after 120 s — starting the mic anyway")
+        else:
+            print("[launch] voice ready — mic open")
+        signals.status.emit("listening")
+        listener.start()
+    threading.Thread(target=_start_listening, daemon=True, name="listener").start()
 
     win = GladosWindow(signals)
     _admin_console = win.admin_console

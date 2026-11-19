@@ -222,9 +222,10 @@ class VisionClient:
                 self.last_error = str(e)
                 consecutive_errors += 1
                 if consecutive_errors == 1:
-                    print(f"[vision_client] connection error: {e}")
-                elif consecutive_errors == 10:
-                    print(f"[vision_client] Jetson unreachable — will keep retrying silently")
+                    print(f"[vision_client] cannot reach the Jetson: {e}")
+                elif consecutive_errors % 150 == 0:   # every ~30 s at 5 Hz
+                    print(f"[vision_client] still cannot reach {self._demo_url} "
+                          f"({consecutive_errors} failed polls)")
                 self._ok = False
 
             elapsed = time.time() - t0
