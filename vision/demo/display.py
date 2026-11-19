@@ -318,6 +318,12 @@ class WebServer:
             return msg
         self.jpeg = None
         self.clients = 0
+        # Low-bandwidth variant for remote viewers (the robot GUI over Tailscale):
+        # /stream?lite=1 → 960 px wide, quality 60, at most 10 fps (~2 Mbit/s
+        # instead of ~25). Encoded only while a lite client is connected.
+        self.jpeg_lite = None
+        self.clients_lite = 0
+        self._t_lite = 0.0
         self.cond = threading.Condition()
         server = self
 
@@ -363,22 +369,26 @@ class WebServer:
                 elif u.path == "/forget_all":
                     self._send(face_call("forget_all"))
                 elif u.path == "/stream":
-                    self._stream()
+                    self._stream(lite=q.get("lite", ["0"])[0] not in ("0", ""))
                 else:
                     self.send_error(404)
 
-            def _stream(self):
+            def _stream(self, lite=False):
                 self.send_response(200)
                 self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
                 self.end_headers()
+                attr = "jpeg_lite" if lite else "jpeg"
                 with server.cond:
-                    server.clients += 1
+                    if lite:
+                        server.clients_lite += 1
+                    else:
+                        server.clients += 1
                 try:
                     last = None
                     while True:
                         with server.cond:
-                            server.cond.wait_for(lambda: server.jpeg is not last, timeout=2)
-                            last = server.jpeg
+                            server.cond.wait_for(lambda: getattr(server, attr) is not last, timeout=2)
+                            last = getattr(server, attr)
                         if last is None:
                             continue
                         self.wfile.write(b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
@@ -387,7 +397,10 @@ class WebServer:
                     pass
                 finally:
                     with server.cond:
-                        server.clients -= 1
+                        if lite:
+                            server.clients_lite -= 1
+                        else:
+                            server.clients -= 1
 
         self.httpd = ThreadingHTTPServer(("0.0.0.0", port), Handler)
         self.httpd.daemon_threads = True
@@ -395,6 +408,15 @@ class WebServer:
 
     def publish(self, img):
         """Encode the dashboard for browsers, only while someone is watching."""
+        if self.clients_lite > 0 and time.time() - self._t_lite >= 0.1:
+            self._t_lite = time.time()
+            h, w = img.shape[:2]
+            small = cv2.resize(img, (960, int(h * 960 / w)), interpolation=cv2.INTER_AREA) if w > 960 else img
+            ok, buf = cv2.imencode(".jpg", small, [cv2.IMWRITE_JPEG_QUALITY, 60])
+            if ok:
+                with self.cond:
+                    self.jpeg_lite = buf.tobytes()
+                    self.cond.notify_all()
         if self.clients <= 0:
             return
         h, w = img.shape[:2]

@@ -351,7 +351,8 @@ def _cam_feed_loop(signals):
     global _cam_latest, _cam_pending
     if not JETSON_IP:
         return
-    url = f"http://{JETSON_IP}:{os.environ.get('VISION_DEMO_PORT', '8081')}/stream"
+    # lite=1: 960 px / q60 / ≤10 fps — the full stream (~25 Mbit/s) swamps a Tailscale link
+    url = f"http://{JETSON_IP}:{os.environ.get('VISION_DEMO_PORT', '8081')}/stream?lite=1"
     while True:
         buf = b""
         try:

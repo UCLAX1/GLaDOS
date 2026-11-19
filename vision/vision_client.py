@@ -58,7 +58,7 @@ class VisionClient:
         jetson_ip: Optional[str] = None,
         port: Optional[int] = None,
         poll_hz: float = 5.0,
-        timeout: float = 1.0,
+        timeout: float = 3.0,
     ):
         self._ip      = jetson_ip or os.environ.get("JETSON_IP", "")
         demo_port      = int(port or os.environ.get("VISION_DEMO_PORT", "8081"))
@@ -68,6 +68,8 @@ class VisionClient:
         self.last_ok_t = 0.0  # time of last successful poll
         self.last_error = ""  # most recent poll error (for the GUI)
         self._interval = 1.0 / poll_hz
+        self._session  = _requests.Session() if _REQUESTS_OK else None   # keep-alive: no TCP handshake per poll
+        self._t_err_print = 0.0
         self._timeout  = timeout
 
         self._state: dict = {}
@@ -195,7 +197,8 @@ class VisionClient:
         }
 
     def _fetch(self) -> dict:
-        r = _requests.get(self._demo_url, timeout=self._timeout)
+        # (connect, read): a relayed Tailscale link can take >1 s to answer
+        r = self._session.get(self._demo_url, timeout=(self._timeout, self._timeout))
         r.raise_for_status()
         self.source = "demo"
         raw = r.json()
@@ -221,11 +224,12 @@ class VisionClient:
             except Exception as e:
                 self.last_error = str(e)
                 consecutive_errors += 1
-                if consecutive_errors == 1:
-                    print(f"[vision_client] cannot reach the Jetson: {e}")
-                elif consecutive_errors % 150 == 0:   # every ~30 s at 5 Hz
-                    print(f"[vision_client] still cannot reach {self._demo_url} "
-                          f"({consecutive_errors} failed polls)")
+                # Print when the link goes down, then at most every 30 s — not on
+                # every failed poll of a flaky link.
+                if self._ok or time.time() - self._t_err_print > 30:
+                    self._t_err_print = time.time()
+                    print(f"[vision_client] Jetson not answering ({type(e).__name__}) — "
+                          f"{consecutive_errors} failed poll(s); will keep retrying")
                 self._ok = False
 
             elapsed = time.time() - t0
