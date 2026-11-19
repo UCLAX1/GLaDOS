@@ -319,7 +319,7 @@ class WebServer:
         self.jpeg = None
         self.clients = 0
         # Low-bandwidth variant for remote viewers (the robot GUI over Tailscale):
-        # /stream?lite=1 → 960 px wide, quality 60, at most 10 fps (~2 Mbit/s
+        # /stream?lite=1 → 960 px wide, quality 60, at most 15 fps (a few Mbit/s
         # instead of ~25). Encoded only while a lite client is connected.
         self.jpeg_lite = None
         self.clients_lite = 0
@@ -408,7 +408,7 @@ class WebServer:
 
     def publish(self, img):
         """Encode the dashboard for browsers, only while someone is watching."""
-        if self.clients_lite > 0 and time.time() - self._t_lite >= 0.1:
+        if self.clients_lite > 0 and time.time() - self._t_lite >= 1 / 15:
             self._t_lite = time.time()
             h, w = img.shape[:2]
             small = cv2.resize(img, (960, int(h * 960 / w)), interpolation=cv2.INTER_AREA) if w > 960 else img

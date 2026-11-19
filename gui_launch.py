@@ -337,21 +337,21 @@ def _usage_loop():
 # frame as a Qt event lets them queue up whenever the GUI is slower than the
 # camera: the video falls further and further behind and every other GUI event
 # waits behind the backlog. Instead the worker decodes and scales off the GUI
-# thread, keeps only the newest frame, and pings the GUI only when it has
-# picked up the previous one.
+# thread and keeps only the newest frame; a GUI timer picks it up. (No
+# handshake: a lost ping can never stall the feed.)
 _cam_lock    = threading.Lock()
 _cam_latest  = None            # QImage, already scaled to the label
-_cam_pending = False           # a ping is queued and not yet handled
-_cam_target  = (960, 540)      # label size, updated by the GUI on resize
+_cam_seq     = 0               # bumped per new frame
+_cam_target  = (960, 540)      # label size, updated by the GUI
 CAM_MAX_FPS  = 20
 
 
 def _cam_feed_loop(signals):
     """Pull MJPEG frames from the Jetson; deliver only the newest, ready to paint."""
-    global _cam_latest, _cam_pending
+    global _cam_latest, _cam_seq
     if not JETSON_IP:
         return
-    # lite=1: 960 px / q60 / ≤10 fps — the full stream (~25 Mbit/s) swamps a Tailscale link
+    # lite=1: 960 px / q60 / ≤15 fps — the full stream (~25 Mbit/s) swamps campus Wi-Fi
     url = f"http://{JETSON_IP}:{os.environ.get('VISION_DEMO_PORT', '8081')}/stream?lite=1"
     while True:
         buf = b""
@@ -359,7 +359,9 @@ def _cam_feed_loop(signals):
             req = urllib.request.urlopen(url, timeout=5)
             t_last = 0.0
             while True:
-                chunk = req.read(65536)
+                # read1: return whatever has arrived — read(n) would block until
+                # n bytes, i.e. hold back small frames until several had queued
+                chunk = req.read1(65536)
                 if not chunk:
                     break
                 buf += chunk
@@ -385,11 +387,9 @@ def _cam_feed_loop(signals):
                 img = img.scaled(max(1, w), max(1, h), Qt.KeepAspectRatio, Qt.FastTransformation)
                 with _cam_lock:
                     _cam_latest = img
-                    ping = not _cam_pending
-                    _cam_pending = True
-                if ping:
-                    signals.cam_frame.emit(b"")
-        except Exception:
+                    _cam_seq += 1
+        except Exception as e:
+            print(f"[camera] stream error: {e!r} — retrying")
             time.sleep(2)
 
 
@@ -1318,7 +1318,10 @@ class GladosWindow(QMainWindow):
         s.pipe_speak.connect(self._on_speak)
         s.pipe_done.connect(self._on_done)
         s.pipe_action.connect(self._on_action)
-        s.cam_frame.connect(self._on_cam_frame)
+        self._cam_shown = -1
+        self._cam_timer = QTimer(self)
+        self._cam_timer.timeout.connect(self._on_cam_frame)
+        self._cam_timer.start(1000 // CAM_MAX_FPS)
         s.perception.connect(self.perception_lbl.setText)
 
     # ── Box update handlers ────────────────────────────────────────────────────
@@ -1367,12 +1370,15 @@ class GladosWindow(QMainWindow):
         self.action_lbl.setText(name.replace("_", " ") if name else "")
 
     def _on_cam_frame(self, _unused: bytes = b""):
-        global _cam_pending, _cam_target
-        with _cam_lock:
-            img, _cam_pending = _cam_latest, False
+        """GUI timer: paint the newest camera frame if there is a new one."""
+        global _cam_target
         _cam_target = (self.cam_lbl.width(), self.cam_lbl.height())
-        if img is not None:
-            self.cam_lbl.setPixmap(QPixmap.fromImage(img))
+        with _cam_lock:
+            img, seq = _cam_latest, _cam_seq
+        if img is None or seq == self._cam_shown:
+            return
+        self._cam_shown = seq
+        self.cam_lbl.setPixmap(QPixmap.fromImage(img))
 
     def _open_admin(self):
         self.admin_console.show()
