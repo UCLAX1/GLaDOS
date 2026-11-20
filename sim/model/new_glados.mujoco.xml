@@ -87,10 +87,10 @@
     <general name="head_yaw_slider" joint="shoulder_joint" gainprm="0" ctrllimited="true" ctrlrange="-180 180"/>
     <general name="head_pitch_slider" joint="shoulder_joint" gainprm="0" ctrllimited="true" ctrlrange="-90 90"/>
 
-    <general name="glados_theta_slider" joint="shoulder_joint" gainprm="0" ctrllimited="true" ctrlrange="-90 90"/>
-    <general name="glados_phi_slider" joint="shoulder_joint" gainprm="0" ctrllimited="true" ctrlrange="135 180"/>
+    <general name="arm_theta_slider" joint="shoulder_joint" gainprm="0" ctrllimited="true" ctrlrange="-90 90"/>
+    <general name="arm_phi_slider" joint="shoulder_joint" gainprm="0" ctrllimited="true" ctrlrange="135 180"/>
 
-    <general name="glados_radius_slider" joint="shoulder_joint" gainprm="0" ctrllimited="true" ctrlrange="1.04 1.4675"/>
+    <general name="arm_radius_slider" joint="shoulder_joint" gainprm="0" ctrllimited="true" ctrlrange="1.04 1.4675"/>
 
   </actuator>
 
