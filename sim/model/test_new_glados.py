@@ -5,21 +5,6 @@ from scipy.spatial.transform import Rotation as R
 import mujoco
 import mujoco.viewer
 
-# inverse kinematics referenced from:
-# https://memememememememe.me/post/stewart-platform-math/
-
-# another good resource:
-# https://raw.org/research/inverse-kinematics-of-a-stewart-platform/
-
-# https://quaternion.readthedocs.io/en/latest/quaternion/#quaternion.rotate_vectors
-# def rotate_vector_by_quat(v: np.ndarray, q: np.quaternion):
-#   q_float_array = quaternion.as_float_array(q)
-#   s = q_float_array[0] # scalar part
-#   r = q_float_array[1:] # vector part
-#   m = np.sum(q_float_array**2) # sum of squares
-
-#   return v + 2 * np.cross(r, s*v + np.cross(r, v)) / m
-
 # def pol2cart(r, theta):
 #   return r * np.array([np.cos(theta), np.sin(theta)])
 
@@ -33,12 +18,17 @@ class Glados:
   ):
     """init function
 
+    :param shoulder_length: length from the base joint to the elbow joint
+    :param elbow_length: length from the elbow joint to the neck 
+    :param head_radius: distance from the platform to the eye
+
     """
 
-    # PUBLIC
+    # self.max_head_pitch_correction = np.deg2rad(30)
+    # self.max_head_yaw_correction = np.deg2rad(30)
 
-    self.max_head_pitch_correction = np.deg2rad(30)
-    self.max_head_yaw_correction = np.deg2rad(30)
+    self.max_head_pitch_correction = np.deg2rad(60)
+    self.max_head_yaw_correction = np.deg2rad(60)
 
     self.shoulder_length = shoulder_length
     self.elbow_length = elbow_length
@@ -50,8 +40,6 @@ class Glados:
     # relative to the elbow, where the no rotation means the platform is horizontal relative to the elbow
     self.target_head_rotation = R.from_quat([0, 0, 0, 1])
 
-    # PRIVATE
-
     self.target_head_yaw = 0.0
     self.target_head_pitch = 0.0
 
@@ -60,7 +48,7 @@ class Glados:
     self.shoulder_angle = 0.0 # zenith, 0 is straight down
     self.elbow_angle = 0.0 # zenith, 0 is parallel to shoulder
 
-  def set_target_vectors(
+  def set_target_pose(
     self,
     model,
     data,
@@ -72,17 +60,7 @@ class Glados:
     self.target_head_yaw = target_head_yaw
     self.target_head_pitch = target_head_pitch
 
-    # print(self.target_head_rotation.as_euler("zyx"))
-
     self._set_target_motor_angles(model, data)
-
-    # max_angle_offset = np.deg2rad(45)
-
-    # if rot.magnitude() > max_angle_offset:
-    #   rotvec = rot.as_rotvec()
-    #   rotvec = rotvec / np.linalg.norm(rotvec) * max_angle_offset
-    #   rot = R.from_rotvec(rotvec)
-    #   self.target_head_direction_vector = rot.apply(elbow_unit_vector)
 
   # vectors are in global space
   def _set_target_motor_angles(self, model, data):
@@ -122,7 +100,15 @@ class Glados:
     head_yaw_correction_angle = -(self.target_head_yaw - self.base_angle)
     head_yaw_correction_angle = np.clip(head_yaw_correction_angle, -self.max_head_yaw_correction, self.max_head_yaw_correction)
 
-    self.target_head_rotation = R.from_euler("zyx", [0.0, head_yaw_correction_angle, head_pitch_correction_angle])
+    # mocap_head_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "debug_target_head")
+    # mocap_head_idx = m.body_mocapid[mocap_head_id]
+    # data.mocap_pos[mocap_head_idx] = self.target_arm_position_vector + self.head_radius * np.array([np.cos(self.target_head_pitch) * np.cos(self.target_head_yaw), np.cos(self.target_head_pitch) * np.sin(self.target_head_yaw), -np.sin(self.target_head_pitch)]) + np.array([0, 0, 2.4])
+
+    self.target_head_rotation = R.from_euler("zyx", [
+      0.0, 
+      head_yaw_correction_angle, 
+      head_pitch_correction_angle
+    ])
 
     # mocap_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "debug_target_head")
     # mocap_idx = m.body_mocapid[mocap_id]
@@ -154,7 +140,10 @@ def move_head(model, data, target_rotation: R):
   angle_z = euler_angles[0]
   # print(euler_angles)
 
-  # # ROTATION MATRIX: zyx
+  # zyx (extrinsic)
+  # ZYX (intrinsic)
+
+  # ROTATION MATRIX: zyx
 
   x_motor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "head_motor_x")
   y_motor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "head_motor_y")
@@ -214,7 +203,7 @@ with mujoco.viewer.launch_passive(m, d) as viewer:
 
     target_head_position_vector = glados_radius * np.array([np.cos(glados_theta) * np.sin(glados_phi), np.sin(glados_theta) * np.sin(glados_phi), np.cos(glados_phi)])
 
-    glados.set_target_vectors(m, d, target_head_position_vector, head_yaw, head_pitch)
+    glados.set_target_pose(m, d, target_head_position_vector, head_yaw, head_pitch)
 
     # target_head_direction_vector_relative_to_elbow = glados.get_target_head_direction_vector_relative_to_elbow()
     # print(f"{glados_theta:.2f}, {glados_phi:.2f}")
@@ -226,6 +215,7 @@ with mujoco.viewer.launch_passive(m, d) as viewer:
     move_arm(m, d, glados.base_angle, glados.shoulder_angle, glados.elbow_angle)
 
     move_head(m, d, glados.target_head_rotation)
+
 
     # mj_step can be replaced with code that also evaluates
     # a policy and applies a control signal before stepping the physics.
