@@ -1,11 +1,14 @@
-# import mujoco
+import mujoco
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-class ArmSolver:
+
+class RobotContext:
 
   def __init__(
     self,
+    model,
+    data,
     shoulder_length,
     elbow_length,
     head_radius,
@@ -17,6 +20,9 @@ class ArmSolver:
     :param head_radius: distance from the platform to the the middle of the head
 
     """
+
+    self.model = model
+    self.data = data
 
     # self.max_head_pitch_correction = np.deg2rad(30)
     # self.max_head_yaw_correction = np.deg2rad(30)
@@ -44,14 +50,15 @@ class ArmSolver:
 
   def get_target_angles(self):
     arm_angles = [
-        self.base_angle, 
-        self.shoulder_angle, 
-        self.elbow_angle,
+      self.base_angle, 
+      self.shoulder_angle, 
+      self.elbow_angle,
     ]
 
     return arm_angles, self.target_head_rotation
 
-  def set_target_pose(
+  
+  def set_target_pose_and_solve_ik(
     self,
     target_arm_position_vector,
     target_head_yaw,
@@ -61,15 +68,24 @@ class ArmSolver:
     self.target_head_yaw = target_head_yaw
     self.target_head_pitch = target_head_pitch
 
-    self._set_target_motor_angles()
-
+    self.solve_ik(
+      self.target_arm_position_vector, 
+      self.target_head_yaw, 
+      self.target_head_pitch,
+    )
+  
   # vectors are in global space
-  def _set_target_motor_angles(self):
+  def solve_ik(
+    self, 
+    target_arm_position_vector,
+    target_head_yaw,
+    target_head_pitch,
+  ):
     # T
-    arm_vector_length = np.linalg.norm(self.target_arm_position_vector)
-    arm_vector_x = self.target_arm_position_vector[0]
-    arm_vector_y = self.target_arm_position_vector[1]
-    arm_vector_z = self.target_arm_position_vector[2]
+    arm_vector_length = np.linalg.norm(target_arm_position_vector)
+    arm_vector_x = target_arm_position_vector[0]
+    arm_vector_y = target_arm_position_vector[1]
+    arm_vector_z = target_arm_position_vector[2]
 
 
     self.base_angle = np.atan2(arm_vector_y, arm_vector_x)
@@ -92,15 +108,15 @@ class ArmSolver:
     # global_elbow_angle = np.pi - (self.shoulder_angle + self.elbow_angle)
 
     # how much the head has to rotate in pitch so the head angle matches target_head_pitch
-    head_pitch_correction_angle = -(self.shoulder_angle + self.elbow_angle + self.target_head_pitch - np.pi / 2.0)
+    head_pitch_correction_angle = -(self.shoulder_angle + self.elbow_angle + target_head_pitch - np.pi / 2.0)
     head_pitch_correction_angle = np.clip(head_pitch_correction_angle, -self.max_head_pitch_correction, self.max_head_pitch_correction)
 
-    head_yaw_correction_angle = -(self.target_head_yaw - self.base_angle)
+    head_yaw_correction_angle = -(target_head_yaw - self.base_angle)
     head_yaw_correction_angle = np.clip(head_yaw_correction_angle, -self.max_head_yaw_correction, self.max_head_yaw_correction)
 
     # mocap_head_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "debug_target_head")
     # mocap_head_idx = m.body_mocapid[mocap_head_id]
-    # data.mocap_pos[mocap_head_idx] = self.target_arm_position_vector + self.head_radius * np.array([np.cos(self.target_head_pitch) * np.cos(self.target_head_yaw), np.cos(self.target_head_pitch) * np.sin(self.target_head_yaw), -np.sin(self.target_head_pitch)]) + np.array([0, 0, 2.4])
+    # data.mocap_pos[mocap_head_idx] = self.target_arm_position_vector + self.head_radius * np.array([np.cos(target_head_pitch) * np.cos(target_head_yaw), np.cos(target_head_pitch) * np.sin(target_head_yaw), -np.sin(target_head_pitch)]) + np.array([0, 0, 2.4])
 
     self.target_head_rotation = R.from_euler("zyx", [
       0.0, 
@@ -111,3 +127,33 @@ class ArmSolver:
     # mocap_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "debug_target_head")
     # mocap_idx = m.body_mocapid[mocap_id]
     # data.mocap_pos[mocap_idx] = self.target_arm_position_vector + self.head_radius * self.target_head_rotation.inv().apply([0, 0, -1]) + np.array([0, 0, 2.4])
+
+    return self.get_target_angles()
+
+  def move_arm(self):
+    base_motor_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, "base_motor")
+    shoulder_motor_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, "shoulder_motor")
+    elbow_motor_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, "elbow_motor")
+
+    self.data.ctrl[base_motor_id] = self.base_angle
+    self.data.ctrl[shoulder_motor_id] = self.shoulder_angle
+    self.data.ctrl[elbow_motor_id] = self.elbow_angle
+
+  # target rotation is relative to the elbow, where z is parallel to the elbow
+  def move_head(self):
+
+    # zyx (extrinsic)
+    # ZYX (intrinsic)
+
+    euler_angles = self.target_head_rotation.as_euler("zyx")
+    angle_x = euler_angles[2]
+    angle_y = euler_angles[1]
+    angle_z = euler_angles[0]
+
+    x_motor_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, "head_motor_x")
+    y_motor_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, "head_motor_y")
+    z_motor_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, "head_motor_z")
+
+    self.data.ctrl[x_motor_id] = angle_x
+    self.data.ctrl[y_motor_id] = angle_y
+    self.data.ctrl[z_motor_id] = angle_z
