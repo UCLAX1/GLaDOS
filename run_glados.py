@@ -42,14 +42,14 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from central_ai.brain import GladosBrain, build_turn
 from listening.listener import SpeechListener
-from speech.speech_queue import enqueue
+from speech.speech_queue import enqueue, QUEUE_DIR
 from vision.vision_client import VisionClient
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 # Gestures run in the simulator by default. Set GLADOS_HARDWARE=1 to drive the
 # real motors instead — run_action.py switches backend on the same variable.
 HARDWARE      = bool(os.environ.get("GLADOS_HARDWARE"))
-SIM_QUEUE_DIR = Path("/tmp/glados_sim_queue")
+SIM_QUEUE_DIR = QUEUE_DIR.parent / "glados_sim_queue"   # /tmp on Mac/Linux, %TEMP% on Windows
 
 # Maps brain gesture names → action script names in actions/scripts/
 GESTURE_MAP = {
@@ -235,7 +235,7 @@ def main():
     print("=" * 60)
     print("  GLaDOS Pipeline")
     print("  Brain:   Bonsai-8B @ localhost:8080")
-    print("  Speech:  glados_daemon  → /tmp/glados_request.json")
+    print(f"  Speech:  glados_daemon  → {QUEUE_DIR}")
     print("  Mic:     default input device")
     print("=" * 60)
     print()

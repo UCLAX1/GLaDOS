@@ -6,21 +6,31 @@ UCLA X1's 2026-2027 GLaDOS project.
 
 ### Option A — GUI (recommended)
 
-Same two commands on every machine — the scripts detect which one they are on.
+One command, on every machine:
 
 ```bash
-./setup.sh      # once: installs everything this machine needs   (Windows: setup.bat)
-./start.sh      # every time                                     (Windows: start.bat)
+python3 run.py        # Mac / Linux / Jetson
+py run.py             # Windows (or double-click run.py)
 ```
 
-| Machine | What `./start.sh` runs |
+It detects what the machine is for, installs anything missing (first run only,
+or when `requirements.txt` changes), then starts it:
+
+| Machine | What it runs |
 |---|---|
 | **Jetson** (start first) | camera + vision; serves video and what it sees on `:8081` |
-| **Mac / Windows PC** | llama-server, speech daemon, listener, MuJoCo sim and the GUI, reading vision from the Jetson |
+| **Mac / Windows PC** | llama-server, speech daemon, listener, MuJoCo sim and the GUI |
 
-The Mac looks for the Jetson at `100.73.92.3`; override with `JETSON_IP=<ip> ./start.sh`
-(`JETSON_IP=none` runs without vision). On Windows use `set JETSON_IP=<ip>` before `start.bat`;
-`start.bat vision` runs the camera demo on the PC itself if there is no Jetson.
+Vision on the Mac/PC: the Jetson (`100.73.92.3`) if it answers, else this
+machine's webcam if set up (`run.py --vision`), else none — the demo runs either way.
+
+| Option | |
+|---|---|
+| `--jetson IP` | Jetson address (`none` = no vision) |
+| `--vision` | also set up webcam vision on this machine |
+| `--role vision` | run the camera/vision side on this machine |
+| `--setup` | reinstall / re-check everything |
+| `--no-start` | set up only |
 
 ### Option B — Headless (three terminals)
 
@@ -55,8 +65,8 @@ per-stage distribution over the session.
 ## Structure
 
 ```
-setup.sh / start.sh     one-command setup and start (Mac and Jetson; .bat versions for Windows)
-gui_launch.py           all-in-one GUI (what start.sh runs on the Mac)
+run.py                  the one command: setup (if needed) + start, on every machine
+gui_launch.py           all-in-one GUI (what run.py starts on the Mac/PC)
 pipeline.py             turn manager: early start, merging, barge-in, cancel
 run_glados.py           headless pipeline entry point
 │

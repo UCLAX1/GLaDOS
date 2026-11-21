@@ -1,5 +1,5 @@
 # GLaDOS pipeline — install into a fresh venv:
-#   ./setup.sh        (creates listening/venv and installs this file)
+#   python3 run.py    (creates listening/venv and installs this file automatically)
 
 # ── STT / Listening ───────────────────────────────────────────────────────────
 faster-whisper

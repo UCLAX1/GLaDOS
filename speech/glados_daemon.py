@@ -37,8 +37,11 @@ Machine-readable events on stdout (one per line, for the GUI):
     [cancelled]   {"dropped": n}
 
 Platform:
-    Uses sounddevice (PortAudio). Falls back to afplay (Mac) / aplay (Linux),
-    or set AUDIO_PLAYER to override the fallback command.
+    Uses sounddevice (PortAudio) on Mac, Windows and Linux. If the output device
+    does not accept the model's 24 kHz (common on Windows, and on some USB
+    devices such as the reSpeaker), audio is resampled to the device's own rate.
+    Fallback without sounddevice: afplay (Mac) / winsound (Windows) / aplay
+    (Linux), or set AUDIO_PLAYER to override the fallback command.
 """
 
 import json
@@ -67,8 +70,19 @@ if "AUDIO_PLAYER" in os.environ:
     AUDIO_PLAYER = os.environ["AUDIO_PLAYER"].split()
 elif sys.platform == "darwin":
     AUDIO_PLAYER = ["afplay"]
+elif sys.platform == "win32":
+    AUDIO_PLAYER = ["winsound"]       # stdlib, handled in _play_subprocess
 else:
     AUDIO_PLAYER = ["aplay"]
+
+
+def resample(audio: np.ndarray, src: int, dst: int) -> np.ndarray:
+    """Linear resample — plenty for speech, no scipy needed."""
+    if src == dst or len(audio) == 0:
+        return audio
+    n = max(1, int(round(len(audio) * dst / src)))
+    x = np.linspace(0, len(audio) - 1, n)
+    return np.interp(x, np.arange(len(audio)), audio).astype(np.float32)
 
 
 def emit(tag: str, **payload) -> None:
@@ -114,6 +128,7 @@ class Player(threading.Thread):
         self.q: queue.Queue = queue.Queue(maxsize=BUFFER_SEGMENTS)
         self._stream     = None
         self._sd         = None
+        self.out_rate    = sample_rate    # what the open stream actually runs at
         try:
             import sounddevice as sd
             self._sd = sd
@@ -123,15 +138,32 @@ class Player(threading.Thread):
 
     # -- stream management --------------------------------------------------
     def _open(self):
-        if self._stream is None and self._sd is not None:
+        if self._stream is not None or self._sd is None:
+            return
+        # Try the model's own rate first, then the device's native rate (many
+        # Windows/USB outputs only take 44.1/48 kHz) — audio is resampled to match.
+        rates = [self.sample_rate]
+        try:
+            dev_rate = int(self._sd.query_devices(kind="output")["default_samplerate"])
+            if dev_rate not in rates:
+                rates.append(dev_rate)
+        except Exception:
+            pass
+        last = None
+        for r in rates + [48000, 44100]:
             try:
-                self._stream = self._sd.OutputStream(
-                    samplerate=self.sample_rate, channels=1, dtype="float32")
+                self._stream = self._sd.OutputStream(samplerate=r, channels=1, dtype="float32")
                 self._stream.start()
+                if r != self.out_rate:
+                    print(f"[player] output device runs at {r} Hz — resampling from "
+                          f"{self.sample_rate} Hz", flush=True)
+                self.out_rate = r
+                return
             except Exception as e:
-                print(f"[player] could not open output stream: {e}", flush=True)
+                last = e
                 self._stream = None
-                self._sd = None          # fall back to subprocess playback
+        print(f"[player] could not open output stream: {last} — using fallback player", flush=True)
+        self._sd = None                  # fall back to subprocess playback
 
     def _close(self, abort: bool = False):
         if self._stream is not None:
@@ -147,12 +179,14 @@ class Player(threading.Thread):
         self._open()
         if self._stream is None:
             return self._play_subprocess(audio, t_request)
-        for i in range(0, len(audio), BLOCK_FRAMES):
+        audio = resample(audio, self.sample_rate, self.out_rate)
+        block = max(1, BLOCK_FRAMES * self.out_rate // self.sample_rate)
+        for i in range(0, len(audio), block):
             self.cancel.poll()
             if self.cancel.is_cancelled(t_request):
                 self._close(abort=True)      # drop what is still buffered
                 return False
-            self._stream.write(audio[i:i + BLOCK_FRAMES])
+            self._stream.write(audio[i:i + block])
         return True
 
     def _play_subprocess(self, audio: np.ndarray, t_request: float) -> bool:
@@ -161,6 +195,18 @@ class Player(threading.Thread):
             tmp = f.name
         try:
             sf.write(tmp, audio, self.sample_rate)
+            if AUDIO_PLAYER == ["winsound"]:
+                import winsound
+                winsound.PlaySound(tmp, winsound.SND_FILENAME | winsound.SND_ASYNC)
+                end = time.time() + len(audio) / self.sample_rate
+                while time.time() < end:
+                    self.cancel.poll()
+                    if self.cancel.is_cancelled(t_request):
+                        winsound.PlaySound(None, 0)      # stop
+                        return False
+                    time.sleep(0.02)
+                time.sleep(0.05)                          # let the tail play before the file goes
+                return True
             proc = subprocess.Popen(AUDIO_PLAYER + [tmp],
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             while proc.poll() is None:

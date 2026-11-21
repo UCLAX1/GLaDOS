@@ -1626,7 +1626,7 @@ def main():
     # load and neither depends on the other.
     #   -np 1    one slot: every request hits the same prompt cache
     #   -c 4096  enough for prompt + history; far less memory than the default
-    # Extra flags: LLAMA_ARGS="-t 8" ./start.sh
+    # Extra flags: LLAMA_ARGS="-t 8" python3 run.py
     import shlex
     #   -ngl 99  run every layer on the GPU (Metal)
     llama_cmd = [LLAMA_CMD, "-m", str(GGUF), "--port", "8080", "-np", "1", "-c", "4096", "-ngl", "99",

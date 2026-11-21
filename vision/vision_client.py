@@ -22,7 +22,7 @@ If the Jetson is unreachable the client silently returns empty context — the
 pipeline degrades gracefully rather than crashing.
 
 Set env var JETSON_IP to skip passing the IP explicitly:
-    JETSON_IP=100.73.92.3 ./start.sh
+    python3 run.py --jetson 100.73.92.3
 """
 
 import os
