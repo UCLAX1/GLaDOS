@@ -13,7 +13,8 @@ WebServer serves on http://<host>:<port>/
     /         page with the live view and module buttons
     /stream   MJPEG of the dashboard
     /status   JSON of module states and people
-    /toggle?m=<key>, /register?name=<name>, /cancel, /forget?name=<name>, /forget_all
+    /toggle?m=<key>, /idle (auto-idle on/off), /register?name=<name>, /cancel,
+    /forget?name=<name>, /forget_all
 """
 
 import json
@@ -73,9 +74,10 @@ def _text(img, s, org, scale=0.55, color=WHITE, thick=1):
 
 
 class Compositor:
-    def __init__(self, source, workers: dict):
+    def __init__(self, source, workers: dict, presence=None):
         self.source = source
         self.w = workers
+        self.presence = presence   # presence.Presence (auto-idle), or None
         self.people = []           # last fused list, for /status
         self.notice = ""           # one-line message at the bottom of the panel
         self.notice_t = 0.0
@@ -196,7 +198,13 @@ class Compositor:
         _text(pn, f"camera: {self.source.status}"[:44], (18, y), 0.45, GREY)
         y += 22
         _text(pn, f"camera {self.source.fps:4.1f} fps   display {self.fps:4.1f} fps", (18, y), 0.45, GREY)
-        y += 34
+        y += 22
+        if self.presence is not None:
+            pr = self.presence
+            color = {"idle": AMBER, "aware": (255, 200, 120)}.get(pr.mode, (120, 230, 120)) if pr.enabled else GREY
+            _text(pn, pr.line()[:56], (18, y), 0.45, color)
+            y += 22
+        y += 12
         for wk in self.w.values():
             color = AMBER if wk.paused_for and wk.state == "running" else STATE_COLORS.get(wk.state, GREY)
             cv2.circle(pn, (26, y - 5), 6, color, -1)
@@ -232,7 +240,7 @@ class Compositor:
             _text(pn, "Enter = start (only that person in view), Esc = cancel", (18, h - 40), 0.42, GREY)
         elif self.notice and time.time() - self.notice_t < 8:
             _text(pn, self.notice[:56], (18, h - 60), 0.45, AMBER)
-        _text(pn, "1-5 toggle  r register  x cancel  f full  q quit", (18, h - 16), 0.42, GREY)
+        _text(pn, "1-5 toggle  i idle  r register  x cancel  f full  q quit", (18, h - 16), 0.42, GREY)
 
     def status(self) -> dict:
         fw = self.w.get("face")
@@ -248,6 +256,7 @@ class Compositor:
                             "ms": round(w.ms), "message": w.error or w.message} for k, w in self.w.items()},
             "people": [{k: v for k, v in p.items() if k != "box"} for p in self.people],
             "system": _safe_system(),
+            "presence": self.presence.status() if self.presence is not None else None,
         }
 
 
@@ -269,7 +278,7 @@ input{background:var(--card);color:var(--fg);border:1px solid var(--line);border
 #msg{color:#fc6}.dim{color:var(--dim)}
 img{display:block;width:100%;height:auto}
 </style></head><body>
-<header><h1>GLaDOS Vision</h1><span id="mods"></span></header>
+<header><h1>GLaDOS Vision</h1><span id="mods"></span><button id="idleb" title="pause heavy features while nobody is close">Auto-idle</button><span id="mode" class="dim"></span></header>
 <section><b>Faces</b>
 <input id="nm" placeholder="name" size="10"><button id="regb">Register</button><button id="canb">Cancel</button>
 <span class="dim">Known:</span><span id="known"></span><button class="small" id="fall">Forget all</button>
@@ -280,6 +289,7 @@ const $ = id => document.getElementById(id), btns = {};
 async function call(url){try{const t=await (await fetch(url)).text(); if(t&&t!='ok')$('msg').textContent=t;}catch(e){$('msg').textContent='no connection';} poll(true);}
 $('regb').onclick=()=>call('/register?name='+encodeURIComponent($('nm').value));
 $('canb').onclick=()=>call('/cancel');
+$('idleb').onclick=()=>call('/idle');
 $('fall').onclick=()=>{if(confirm('Forget every registered face?'))call('/forget_all');};
 let timer=null, knownKey='';
 async function poll(once){
@@ -297,6 +307,10 @@ async function poll(once){
         b.textContent=n+' ✕';b.title='forget '+n;b.onclick=()=>{if(confirm('Forget '+n+'?'))call('/forget?name='+encodeURIComponent(n));};k.appendChild(b);}}
     if(s.faces.message)$('msg').textContent=s.faces.message;
     $('canb').style.display=s.faces.registering?'':'none';
+    if(s.presence){const p=s.presence,r=p.room||{};
+      $('idleb').textContent='Auto-idle: '+(p.enabled?'on':'off');$('idleb').className=p.enabled?'on':'off';
+      $('mode').textContent=(p.enabled?p.mode.toUpperCase()+' ('+p.reason+') · ':'')+'motion '+(r.optical_flow||'?')+
+        ', light '+(r.light||'?')+(r.blocked?', CAMERA BLOCKED':'');}
   }catch(e){}
   if(!once){clearTimeout(timer);timer=setTimeout(poll,1000);}
 }
@@ -354,6 +368,9 @@ class WebServer:
                     if w:
                         w.toggle()
                     self._send("ok")
+                elif u.path == "/idle":
+                    p = server.comp.presence
+                    self._send(p.toggle() if p is not None else "auto-idle not available")
                 elif u.path == "/register":
                     self._send(server.on_register(q.get("name", [""])[0]))
                 elif u.path == "/cancel":

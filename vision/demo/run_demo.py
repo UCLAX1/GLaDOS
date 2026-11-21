@@ -11,6 +11,7 @@ dashboard (display.py) fuses the results per tracked person:
     4  expression         MediaPipe face + HSEmotion     (expression2.py)
     5  depth distance     ZED SDK depth per person       (depth/zed_depth.py)
 A feature that fails to load is shown as unavailable; the rest keep running.
+Auto-idle (presence.py) pauses the heavy features while nobody is close.
 
 Usage (from the repo root, after `python vision/demo/setup_demo.py`):
     vision/demo/.venv/bin/python vision/demo/run_demo.py                  # auto camera, window + web
@@ -20,9 +21,10 @@ Usage (from the repo root, after `python vision/demo/setup_demo.py`):
     ... run_demo.py --modules track,gesture --fullscreen
     ... run_demo.py --source zed --rotate 180                             # camera upside down
     ... run_demo.py --no-window                                           # browser only
+    ... run_demo.py --no-idle                                             # everything always on
 
-Keys: 1-5 toggle a feature, r register a face (type name, Enter; only that person in view),
-      x cancel registering, f fullscreen, q quit.
+Keys: 1-5 toggle a feature, i auto-idle on/off, r register a face (type name, Enter; only
+      that person in view), x cancel registering, f fullscreen, q quit.
 Browser: http://<this machine>:8080/  (same view, buttons for the same controls)
 """
 
@@ -48,6 +50,7 @@ import cv2  # noqa: E402
 
 from camera import FrameSource  # noqa: E402
 from display import Compositor, WebServer  # noqa: E402
+from presence import Presence  # noqa: E402
 from modules.depth import DepthWorker  # noqa: E402
 from modules.expression import ExpressionWorker  # noqa: E402
 from modules.faces import FaceWorker  # noqa: E402
@@ -82,10 +85,12 @@ def local_ips():
     return sorted(ips, key=lambda i: not i.startswith("100."))     # Tailscale first
 
 
-def report(source, workers) -> int:
+def report(source, workers, presence=None) -> int:
     """--check: one line per module; failure if the camera or any module didn't run."""
     print(f"\n{'module':<18} {'state':<12} {'load s':>7} {'Hz':>6} {'ms':>6}  note")
     print(f"{'camera':<18} {'ok' if source.fps else 'NO FRAMES':<12} {'':>7} {source.fps:6.1f} {'':>6}  {source.status}")
+    if presence is not None:
+        print(f"{'presence':<18} {presence.status()['mode']:<12} {'':>7} {'':>6} {'':>6}  {presence.line()}")
     bad = source.fps == 0
     for w in workers:
         ok = w.state in ("running",) and w.hz > 0
@@ -108,6 +113,8 @@ def main():
     ap.add_argument("--rotate", type=int, default=0, choices=[0, 90, 180, 270],
                     help="degrees clockwise, for a camera mounted sideways or upside down")
     ap.add_argument("--height", type=int, default=720, help="camera height per lens (720 or 376/480)")
+    ap.add_argument("--no-idle", action="store_true",
+                    help="keep every feature running even when nobody is around (also DEMO_IDLE=0)")
     ap.add_argument("--check", type=int, metavar="SECONDS",
                     help="headless self-test: run everything this long, print a table, exit 1 on failure")
     args = ap.parse_args()
@@ -125,7 +132,10 @@ def main():
     # load one model at a time: loading in parallel thrashes memory on the Jetson
     # and makes every module slow to appear. The window is up meanwhile.
     workers = list(hub.values())
-    comp = Compositor(source, hub)
+    # the self-test measures every module, so it runs with everything on
+    idle = not (args.no_idle or args.check or os.environ.get("DEMO_IDLE", "1") == "0")
+    presence = Presence(source, hub, enabled=idle).start()
+    comp = Compositor(source, hub, presence)
 
     def register(name):
         face = hub.get("face")
@@ -195,6 +205,8 @@ def main():
                         comp.typing += chr(key)
                 elif key == ord("q") or key == 27:
                     break
+                elif key == ord("i"):
+                    comp.say(presence.toggle())
                 elif key == ord("r"):
                     comp.typing = ""
                 elif key == ord("x"):
@@ -221,7 +233,8 @@ def main():
         crashed = True
     finally:
         print("[demo] stopping")
-        code = report(source, workers) if args.check else 0
+        presence.stop()
+        code = report(source, workers, presence) if args.check else 0
         code = 1 if crashed else code
         for w in workers:
             w.stop()

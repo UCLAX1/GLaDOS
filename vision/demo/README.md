@@ -64,10 +64,11 @@ vision/demo/.venv/bin/python vision/demo/run_demo.py            # Windows: visio
 | `--fullscreen` / `--no-window` | projector / browser only |
 | `--web 8080` | browser view port, 0 = off |
 
-**Keys:** `1`–`5` turn a feature on or off, `f` toggles fullscreen and `q` quits. To register a face, press `r`, type the name and press Enter (`x` cancels).
+**Keys:** `1`–`5` turn a feature on or off, `i` turns auto-idle on or off, `f` toggles fullscreen and `q` quits. To register a face, press `r`, type the name and press Enter (`x` cancels).
 
 **Browser view:** go to `http://<machine-ip>:8080/` from any device on the same network. Tailscale's `http://100.73.92.3:8080/` works from anywhere on the tailnet; campus Wi-Fi often blocks device-to-device traffic. The terminal prints every address at startup. The page shows the same dashboard plus:
 * a button for each feature, to turn it on or off
+* **Auto-idle: on/off**, and the current mode and room state
 * **Register** / **Cancel**, a ✕ on each known name to forget that face, and **Forget all**
 
 **Registering faces:**
@@ -77,6 +78,23 @@ vision/demo/.venv/bin/python vision/demo/run_demo.py            # Windows: visio
 * A face that's already registered under another name is refused, and the message says whose it is.
 * Names: each face labels one person only, a name belongs to one person at a time, and two "unknown" results in a row clear a wrong name.
 * Faces are saved to `vision/known_faces/<name>.npy`, which is gitignored.
+
+## Auto-idle
+
+When nobody is around, the heavy features pause by themselves (`presence.py`). There's no extra model: person tracking watches the room, plus a room check on a tiny grey copy of each frame.
+
+| mode | when | what runs |
+|---|---|---|
+| **IDLE** | nobody seen for 10 s | tracking only, at 2 Hz. Any motion brings it to full speed at once |
+| **AWARE** | someone in view, further than 3 m | tracking + depth |
+| **ENGAGED** | someone within 3 m (no ZED: anyone in view), or a face is being registered | everything |
+
+* Waking from idle took 0.5–0.6 s in tests, measured from the first frame with a person until everything was on.
+* Going back down has margins, so someone standing near the boundary doesn't flip it on and off. Engaged → aware happens only after 5 s further than 4.2 m. Aware → idle happens only after 10 s with nobody in view.
+* The room check reports motion (none/low/medium/high), light (ok/dark/bright) and a blocked camera. It's shown on the panel and in `/status` under `presence`, along with `person_detected`, `person_count` and `nearest_m`.
+* It only *pauses* features. A feature you turned off by hand stays off, and face registration's own pause is left alone. If the controller ever stops, every pause lapses within 5 s.
+* Turn it off with `i`, the browser button, `--no-idle` or `DEMO_IDLE=0`. Keep it off for a stage demo if an idle-looking dashboard would confuse people. The self-test (`--check`) always runs with it off.
+* Tuning: `DEMO_IDLE_AFTER=10` (seconds), `DEMO_ENGAGE_M=3.0` (metres).
 
 ## Demo-day checklist
 
@@ -103,6 +121,7 @@ Each feature runs at its own rate. Jetson numbers were measured with everything 
 **GPU on the Jetson.** Tracking runs YOLO26n as a TensorRT engine; face recognition and expression run on CUDA. All three go through `onnxruntime-gpu`, so torch stays the CPU build. Any part that can't use the GPU falls back to the CPU on its own, and the panel says which one each feature is using (`GPU TensorRT fp16`, `(GPU)`, `cpu`).
 * No TensorRT engine yet: tracking uses CUDA (~35 ms) and the panel says so. Build it with `setup_demo.py`, not at demo start, because it takes ~8 minutes.
 * The engine is specific to this GPU and these TensorRT/model versions. Re-exporting the model makes onnxruntime rebuild it, ~8 minutes at the next start, so run `setup_demo.py` after any model change.
+* **GPU clock.** The Jetson's power manager keeps the GPU at ~400–500 MHz of its 1020 MHz because each model call is short. That made tracking 40–60 ms instead of 20 ms in later runs. `sudo jetson_clocks` pins full clocks until reboot. It's a system-wide setting on the shared Jetson, so agree on it first, and use it on demo day.
 * To undo: `vision/demo/.venv/bin/pip uninstall -y onnxruntime-gpu && vision/demo/.venv/bin/pip install onnxruntime==1.23.2`.
 
 On the CPU, each library's threads are capped (`workers.onnx_threads`, torch 2 threads). Without the caps the libraries fought over 6 cores and tracking fell to about 1 Hz.
