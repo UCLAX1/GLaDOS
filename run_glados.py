@@ -40,7 +40,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from central_ai.brain import GladosBrain
+from central_ai.brain import GladosBrain, build_turn
 from listening.listener import SpeechListener
 from speech.speech_queue import enqueue
 from vision.vision_client import VisionClient
@@ -58,6 +58,7 @@ GESTURE_MAP = {
     "slow_sweep":      "scan",
     "lean_in":         "curious_peek_vert",
     "dismissive_turn": "look_away",
+    "nod":             "nod",
     "idle":            None,
 }
 
@@ -127,10 +128,11 @@ def on_transcription(text: str):
     dispatch  = 0.0
     sentences = 0
 
-    perception = vision.context_string()
+    # One JSON per turn: what was heard + raw camera data
+    user_json = build_turn(heard=text, vision=vision.snapshot(), event="speech")
 
     with brain_lock:
-        for sentence in brain.respond_stream(text, perception=perception):
+        for sentence in brain.respond_stream(user_json):
             t_disp = time.time()
             if llm_first is None:
                 llm_first = t_disp - t0

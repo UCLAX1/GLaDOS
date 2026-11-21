@@ -27,6 +27,37 @@ import numpy as np
 
 from workers import boxes_contain
 
+try:
+    import sysstats
+except Exception as _e:                       # stats are optional — never break the demo
+    sysstats = None
+    print(f"[demo] system stats unavailable: {_e!r}")
+
+_stats_warned = False
+
+
+def _safe_system() -> dict:
+    """Usage stats for the GUI. Any failure here must not take /status down."""
+    global _stats_warned
+    if sysstats is None:
+        return {}
+    try:
+        return sysstats.snapshot()
+    except Exception as e:
+        if not _stats_warned:
+            _stats_warned = True
+            print(f"[demo] system stats failed (reported once): {e!r}", flush=True)
+        return {}
+
+
+def _json_default(o):
+    """numpy scalars/arrays and anything else json can't encode natively."""
+    if hasattr(o, "item") and getattr(o, "ndim", 0) == 0:
+        return o.item()
+    if hasattr(o, "tolist"):
+        return o.tolist()
+    return str(o)
+
 PANEL_W = 430
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 WHITE, GREY, GREEN, AMBER, RED = (240, 240, 240), (150, 150, 150), (90, 220, 90), (0, 190, 255), (70, 70, 230)
@@ -216,6 +247,7 @@ class Compositor:
                             "hz": round(w.hz, 1),
                             "ms": round(w.ms), "message": w.error or w.message} for k, w in self.w.items()},
             "people": [{k: v for k, v in p.items() if k != "box"} for p in self.people],
+            "system": _safe_system(),
         }
 
 
@@ -308,7 +340,15 @@ class WebServer:
                 if u.path == "/":
                     self._send(PAGE, "text/html")
                 elif u.path == "/status":
-                    self._send(json.dumps(server.comp.status()), "application/json")
+                    try:
+                        body = json.dumps(server.comp.status(), default=_json_default)
+                    except Exception as e:
+                        # Reply with the reason instead of dropping the connection,
+                        # so the Mac's VISION box shows what went wrong.
+                        import traceback
+                        traceback.print_exc()
+                        body = json.dumps({"error": f"{type(e).__name__}: {e}", "people": []})
+                    self._send(body, "application/json")
                 elif u.path == "/toggle":
                     w = server.comp.w.get(q.get("m", [""])[0])
                     if w:

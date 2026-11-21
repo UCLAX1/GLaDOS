@@ -20,14 +20,26 @@ torch and kokoro via glados_tts.
 import itertools
 import json
 import os
+import tempfile
 import time
 from pathlib import Path
 
-QUEUE_DIR = Path(os.environ.get("GLADOS_QUEUE_DIR", "/tmp/glados_queue"))
+# /tmp on Mac/Linux (as documented); the user's temp folder on Windows.
+_TMP = Path("/tmp") if os.name != "nt" else Path(tempfile.gettempdir())
+
+QUEUE_DIR = Path(os.environ.get("GLADOS_QUEUE_DIR", str(_TMP / "glados_queue")))
 
 # Single-shot interface documented in speech/README.md. Still honoured so
 # existing callers and the one-liner in the docs keep working.
-LEGACY_FILE = Path(os.environ.get("GLADOS_QUEUE", "/tmp/glados_request.json"))
+LEGACY_FILE = Path(os.environ.get("GLADOS_QUEUE", str(_TMP / "glados_request.json")))
+
+
+def _unlink(f: Path) -> None:
+    """Delete, ignoring 'already gone' and (Windows) 'still open in the other process'."""
+    try:
+        f.unlink()
+    except OSError:
+        pass
 
 _seq = itertools.count()
 
@@ -40,7 +52,7 @@ def enqueue(text: str, speed: float = 1.0, queue_dir: Path = QUEUE_DIR) -> Path:
     name = f"{time.time():.6f}-{os.getpid()}-{next(_seq):04d}.json"
     tmp  = queue_dir / (name + ".tmp")
     tmp.write_text(json.dumps(payload))
-    tmp.rename(queue_dir / name)      # atomic within one filesystem
+    os.replace(tmp, queue_dir / name)   # atomic within one filesystem (also on Windows)
     return queue_dir / name
 
 
@@ -52,28 +64,50 @@ def next_request(queue_dir: Path = QUEUE_DIR,
             try:
                 data = json.loads(f.read_text())
             except (OSError, json.JSONDecodeError):
-                f.unlink(missing_ok=True)     # corrupt or vanished — drop it
+                _unlink(f)                    # corrupt or vanished — drop it
                 continue
-            f.unlink(missing_ok=True)
+            _unlink(f)
             return data
 
     if legacy_file.exists():
         try:
             raw = legacy_file.read_text()
-            legacy_file.unlink()
+            _unlink(legacy_file)
             return json.loads(raw)
         except (OSError, json.JSONDecodeError):
-            legacy_file.unlink(missing_ok=True)
+            _unlink(legacy_file)
 
     return None
 
 
+CANCEL_NAME = "cancel.marker"   # not .json, so next_request() never returns it
+
+
 def clear(queue_dir: Path = QUEUE_DIR) -> int:
-    """Drop everything pending (e.g. on barge-in). Returns how many were dropped."""
-    if not queue_dir.is_dir():
-        return 0
+    """
+    Drop everything pending (e.g. on barge-in) AND tell the daemon to stop what
+    it is already synthesising / playing. Returns how many queued files were dropped.
+
+    The marker carries a timestamp: the daemon discards every request stamped
+    earlier than it, so sentences enqueued right after clear() are unaffected.
+    """
+    queue_dir.mkdir(parents=True, exist_ok=True)
     n = 0
     for f in queue_dir.iterdir():
-        f.unlink(missing_ok=True)
+        _unlink(f)
         n += 1
+    tmp = queue_dir / (CANCEL_NAME + ".tmp")
+    tmp.write_text(f"{time.time():.6f}")
+    os.replace(tmp, queue_dir / CANCEL_NAME)
     return n
+
+
+def take_cancel(queue_dir: Path = QUEUE_DIR) -> float | None:
+    """Daemon side: consume the cancel marker. Returns its timestamp, or None."""
+    f = queue_dir / CANCEL_NAME
+    try:
+        t = float(f.read_text())
+    except (OSError, ValueError):
+        return None
+    _unlink(f)
+    return t

@@ -115,3 +115,6 @@ vision/demo/.venv/
 vision/demo/models/
 vision/face_detector.tflite
 vision/gesture_eval/recordings/
+
+# llama-server downloaded by setup.bat
+tools/llama/
