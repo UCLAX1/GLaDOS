@@ -113,13 +113,17 @@ class Compositor:
                 holders = [t for t in tracks if boxes_contain(t["box"], cx, cy)]
                 if holders:
                     expr_of.setdefault(min(holders, key=lambda t: area(t["box"]))["id"], e)
+            # crop mode: gestures already carry their track ID
+            by_track = {r["track"]: r["gestures"] for r in (gest or {}).get("people") or []}
             # smallest box first, so overlapping people get the most specific match
             for t in sorted(tracks, key=lambda t: (t["box"][2] - t["box"][0]) * (t["box"][3] - t["box"][1])):
                 p = {"id": t["id"], "box": t["box"], "name": name_for(t["id"]), "expr": None,
                      "gestures": [], "dist": dist.get(t["id"])}
                 if t["id"] in expr_of:
                     p["expr"] = (expr_of[t["id"]]["emotion"], expr_of[t["id"]]["conf"])
-                if gest and gest["anchor"] and boxes_contain(t["box"], *gest["anchor"]) \
+                if by_track:
+                    p["gestures"] = by_track.get(t["id"], [])
+                elif gest and gest["anchor"] and boxes_contain(t["box"], *gest["anchor"]) \
                         and not any(q["gestures"] for q in people):
                     p["gestures"] = gest["gestures"]
                 people.append(p)
@@ -151,15 +155,18 @@ class Compositor:
 
     def _draw_video(self, img, people, faces, exprs, gest):
         scale = max(img.shape[0] / 720, 0.5)
-        if gest and gest["pose"]:
+        bodies = (gest.get("people") or [gest]) if gest else []
+        if gest and any(b["pose"] for b in bodies):
             g = self.w["gesture"]
-            pts = gest["pose"]
-            for a, b in g.pose_connections:
-                if pts[a][2] > 0.5 and pts[b][2] > 0.5:
-                    cv2.line(img, pts[a][:2], pts[b][:2], (230, 230, 230), 2, cv2.LINE_AA)
-            for hand in gest["hands"]:
-                for a, b in g.hand_connections:
-                    cv2.line(img, hand[a], hand[b], (60, 200, 255), 2, cv2.LINE_AA)
+            for body in bodies:                 # one skeleton per person in crop mode
+                pts = body["pose"]
+                if pts:
+                    for a, b in g.pose_connections:
+                        if pts[a][2] > 0.5 and pts[b][2] > 0.5:
+                            cv2.line(img, pts[a][:2], pts[b][:2], (230, 230, 230), 2, cv2.LINE_AA)
+                for hand in body["hands"]:
+                    for a, b in g.hand_connections:
+                        cv2.line(img, hand[a], hand[b], (60, 200, 255), 2, cv2.LINE_AA)
         elif gest:
             for hand in gest["hands"]:
                 for x, y in hand:

@@ -79,6 +79,21 @@ vision/demo/.venv/bin/python vision/demo/run_demo.py            # Windows: visio
 * Names: each face labels one person only, a name belongs to one person at a time, and two "unknown" results in a row clear a wrong name.
 * Faces are saved to `vision/known_faces/<name>.npy`, which is gitignored.
 
+## Gestures per person (crop mode)
+
+Gestures run on a square crop around each of the 2 nearest tracked people (YOLO box, padded so outstretched arms fit). Each person gets their own MediaPipe models and wave history, and their gestures attach to their track ID directly. A single close person (taller than half the frame) uses the whole frame instead, because a crop adds no pixels there. The gesture rules always get whole-frame coordinates, so a crop window that shifts as an arm moves doesn't fake or hide a wave. `GESTURE_MODE=frame` brings back the old one-body, whole-frame mode.
+
+Scored on the labelled clip (`vision/gesture_eval/recordings/20261104_213636`), shrunk to imitate standing further away, Jetson lite models:
+
+| | whole frame | crop mode |
+|---|---|---|
+| as recorded (close) | 73% correct, 79 ms | 76% correct, 55 ms |
+| 2× further | 12% (no hand ever detected) | 63%, 60 ms |
+| 3× further | 10% | 59%, 64 ms |
+| two people side by side | 16% / 0% (follows one body) | 64% / 68%, none mixed up |
+
+Re-run: `vision/demo/.venv/bin/python vision/demo/modules/gestures.py vision/gesture_eval/recordings/<run>`. With two people in view, false alarms rise (30–41%, from 23%). They come from the rules that already misfire on "hands visible" and "pointing at the camera", which now run for each person.
+
 ## Auto-idle
 
 When nobody is around, the heavy features pause by themselves (`presence.py`). There's no extra model: person tracking watches the room, plus a room check on a tiny grey copy of each frame.
@@ -126,4 +141,4 @@ Each feature runs at its own rate. Jetson numbers were measured with everything 
 
 On the CPU, each library's threads are capped (`workers.onnx_threads`, torch 2 threads). Without the caps the libraries fought over 6 cores and tracking fell to about 1 Hz.
 
-Environment overrides: `DEMO_TRACK_BACKEND=auto|gpu|cpu`, `DEMO_ONNX_GPU=0` (faces/expression on the CPU), `GESTURE_COMPLEXITY=0|1`, `DEMO_YOLO_IMGSZ=320`, `DEMO_FACE_PERIOD=1.0`, `DEMO_EXPR_HZ=6`, `ZED_DEPTH_MODE=PERFORMANCE`, `DEMO_ROTATE=180` (start_demo.sh), `DEMO_FACES_DIR=<dir>` (use another folder of known faces, e.g. for tests).
+Environment overrides: `GESTURE_MODE=crop|frame`, `GESTURE_PEOPLE=2`, `GESTURE_CLOSE_FRAC=0.5`, `DEMO_TRACK_BACKEND=auto|gpu|cpu`, `DEMO_ONNX_GPU=0` (faces/expression on the CPU), `GESTURE_COMPLEXITY=0|1`, `DEMO_YOLO_IMGSZ=320`, `DEMO_FACE_PERIOD=1.0`, `DEMO_EXPR_HZ=6`, `ZED_DEPTH_MODE=PERFORMANCE`, `DEMO_ROTATE=180` (start_demo.sh), `DEMO_FACES_DIR=<dir>` (use another folder of known faces, e.g. for tests).
