@@ -82,6 +82,13 @@ class VisionClient:
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
 
+    def set_target(self, ip: str, port: Optional[int] = None) -> None:
+        """Point the client at a different vision host (call before start())."""
+        self._ip = ip or ""
+        p = int(port or os.environ.get("VISION_DEMO_PORT", "8081"))
+        self._demo_url = f"http://{self._ip}:{p}/status" if self._ip else ""
+        self._url = self._demo_url
+
     def start(self):
         """Start the background polling thread."""
         if not self._ip:

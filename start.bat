@@ -6,8 +6,9 @@ rem   start.bat vision   camera + vision demo on this PC instead (serves :8081, 
 rem
 rem Vision normally comes from the Jetson (start it first with ./start.sh).
 rem Options (set before running):
-rem   set JETSON_IP=100.73.92.3    where vision comes from; "none" = run without vision,
-rem                                127.0.0.1 = a second window running "start.bat vision"
+rem   set JETSON_IP=100.73.92.3    Jetson address; "none" = run without vision
+rem   set VISION_MODE=auto         auto: Jetson if it answers, else this PC's webcam
+rem                                (needs "setup.bat vision"), else none.  jetson / local / none
 rem   set GLADOS_GAP_MS=480        silence before an utterance counts as finished
 rem   set LLAMA_ARGS=-t 8          extra llama-server flags
 setlocal

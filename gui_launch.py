@@ -75,9 +75,17 @@ LLAMA_CMD  = os.environ.get("LLAMA_SERVER") or _find_llama()
 MONO       = {"darwin": "Menlo", "win32": "Consolas"}.get(sys.platform, "DejaVu Sans Mono")
 HOST_LABEL = {"darwin": "MAC", "win32": "PC"}.get(sys.platform, "HOST")
 JETSON_IP  = os.environ.get("JETSON_IP", "")
-if JETSON_IP.strip().lower() in ("none", "off", "0"):      # explicit "no vision"
+_NO_VISION = JETSON_IP.strip().lower() in ("none", "off", "0")   # explicit "no vision"
+if _NO_VISION:
     JETSON_IP = ""
     os.environ["JETSON_IP"] = ""
+# Where vision comes from:
+#   auto   (default) the Jetson if it answers, else the vision demo on THIS
+#          machine's webcam (if vision/demo is set up here), else no vision
+#   jetson | local | none   force one of them
+VISION_MODE = os.environ.get("VISION_MODE", "none" if _NO_VISION else "auto").strip().lower()
+LOCAL_VISION_PORT = int(os.environ.get("LOCAL_VISION_PORT", "8091"))
+VISION_SOURCE = "jetson"           # set by choose_vision(): jetson | local | none
 # Silence needed before an utterance counts as finished. Shorter = snappier; a
 # pause that turns out not to be the end is handled by the pipeline (the two
 # halves are merged retroactively), so this can be well under the old 640 ms.
@@ -1035,7 +1043,7 @@ class GladosWindow(QMainWindow):
                 ram = f"&nbsp; ram {j['ram_used_gb']:.1f}/{j['ram_total_gb']:.0f}G {pct(ram_pct)}"
             temp = max([t for t in (j.get("cpu_temp_c"), j.get("gpu_temp_c")) if t is not None],
                        default=None)
-            jet = (f"<b>JETSON</b>&nbsp;cpu {pct(j.get('cpu_pct'))}&nbsp; gpu {pct(j.get('gpu_pct'))}"
+            jet = (f"<b>{VISION_LABEL}</b>&nbsp;cpu {pct(j.get('cpu_pct'))}&nbsp; gpu {pct(j.get('gpu_pct'))}"
                    f"{ram}")
             extra = []
             if temp is not None:
@@ -1046,20 +1054,23 @@ class GladosWindow(QMainWindow):
             if extra:
                 jet += "<br><span style='color:#666'>&nbsp;&nbsp;" + " · ".join(extra) + "</span>"
         else:
-            jet = "<b>JETSON</b>&nbsp;<span style='color:#555'>no stats (demo not reachable or old version)</span>"
+            jet = (f"<b>{VISION_LABEL}</b>&nbsp;<span style='color:#555'>"
+                   + ("no vision source" if VISION_SOURCE == "none" else "no stats yet") + "</span>")
 
         self.box_sys.setText(mac + "<br>" + jet)
 
     def _refresh_vision_box(self):
         if not JETSON_IP:
-            self.box_vision.setText("<span style='color:#a55'>● off</span> — JETSON_IP not set")
+            self.box_vision.setText("<span style='color:#a55'>● off</span> — no camera "
+                                    "(voice, brain and sim still work)")
             return
         s   = vision.latest()
         age = time.time() - vision.last_ok_t if vision.last_ok_t else None
         if not vision.is_connected():
             err = (vision.last_error or "waiting…")[:70]
+            where = "local camera (starting…)" if VISION_SOURCE == "local" else JETSON_IP
             self.box_vision.setText(
-                f"<span style='color:#c55'>● no data</span> from {JETSON_IP}<br>"
+                f"<span style='color:#c55'>● no data</span> from {where}<br>"
                 f"<span style='color:#666'>{err}</span>"
             )
             return
@@ -1293,7 +1304,10 @@ class GladosWindow(QMainWindow):
         cam_bar.addWidget(self.perception_lbl)
         cam_row.addLayout(cam_bar)
 
-        self.cam_lbl = QLabel("waiting for Jetson stream…")
+        self.cam_lbl = QLabel({
+            "jetson": "waiting for Jetson stream…",
+            "local":  "starting local camera (first start loads the vision models)…",
+        }.get(VISION_SOURCE, "no camera — running without vision\n(start the Jetson, or run vision/demo/setup_demo.py on this machine for webcam vision)"))
         self.cam_lbl.setAlignment(Qt.AlignCenter)
         # Explicit minimum so the scaled pixmap never blocks shrinking
         self.cam_lbl.setMinimumSize(160, 120)
@@ -1539,10 +1553,73 @@ def shutdown():
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
+VISION_LABEL = "JETSON"
+
+
+def _vision_up(ip: str, port: int, timeout: float = 1.5) -> bool:
+    try:
+        urllib.request.urlopen(f"http://{ip}:{port}/status", timeout=timeout).read()
+        return True
+    except Exception:
+        return False
+
+
+def choose_vision() -> None:
+    """
+    Decide where vision comes from, so the demo runs with or without the Jetson:
+    Jetson if reachable → else the vision demo on this machine's webcam → else none.
+    """
+    global JETSON_IP, VISION_SOURCE, VISION_LABEL
+    port = int(os.environ.get("VISION_DEMO_PORT", "8081"))
+    mode = VISION_MODE
+    if not JETSON_IP and mode == "auto":
+        mode = "local"                      # no Jetson configured: try the webcam
+
+    if mode in ("auto", "jetson") and JETSON_IP:
+        if mode == "jetson" or _vision_up(JETSON_IP, port):
+            VISION_SOURCE, VISION_LABEL = "jetson", "JETSON"
+            print(f"[vision] using the Jetson at {JETSON_IP}:{port}")
+            return
+        print(f"[vision] Jetson at {JETSON_IP}:{port} not answering")
+
+    if mode in ("auto", "local"):
+        win = os.name == "nt"
+        vpy = ROOT / "vision" / "demo" / ".venv" / ("Scripts/python.exe" if win else "bin/python")
+        started = False
+        if vpy.exists():
+            if _vision_up("127.0.0.1", LOCAL_VISION_PORT, timeout=0.5):
+                started = True                      # already running from a previous start
+            else:
+                log = SPEECH_QUEUE_DIR.parent / "glados_local_vision.log"
+                try:
+                    start_proc([str(vpy), "vision/demo/run_demo.py", "--source", "auto",
+                                "--no-window", "--web", str(LOCAL_VISION_PORT)],
+                               "local vision (webcam)", stdout=open(log, "w"))
+                    started = True
+                    print(f"[vision] local vision log: {log}  (macOS: allow camera access "
+                          "for your terminal app if the camera stays dark)")
+                except Exception as e:
+                    print(f"[vision] could not start local vision: {e!r}")
+        if started:
+            JETSON_IP, VISION_SOURCE, VISION_LABEL = "127.0.0.1", "local", "LOCAL VISION"
+            os.environ["VISION_DEMO_PORT"] = str(LOCAL_VISION_PORT)
+            vision.set_target("127.0.0.1", LOCAL_VISION_PORT)
+            print(f"[vision] using this machine's camera (vision demo on :{LOCAL_VISION_PORT})")
+            return
+        if not vpy.exists():
+            print("[vision] vision/demo is not set up on this machine "
+                  "(python3 vision/demo/setup_demo.py) — continuing without vision")
+
+    JETSON_IP, VISION_SOURCE, VISION_LABEL = "", "none", "VISION"
+    vision.set_target("")
+    print("[vision] running WITHOUT vision — voice, brain and sim work as normal")
+
+
 def main():
     global daemon_proc, _admin_console, _signals, listener
 
     clear_queues()
+    choose_vision()
     vision.start()
 
     # Start the LLM server and the speech daemon together — both take seconds to
