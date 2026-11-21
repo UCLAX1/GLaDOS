@@ -35,7 +35,7 @@ import cv2
 import numpy as np
 
 IDLE_AFTER_S = float(os.environ.get("DEMO_IDLE_AFTER", "10"))   # nobody seen this long -> idle
-ENGAGE_M = float(os.environ.get("DEMO_ENGAGE_M", "3.0"))          # closer than this -> engaged
+ENGAGE_M = float(os.environ.get("DEMO_ENGAGE_M", "2.0"))          # closer than this -> engaged
 DISENGAGE_M = ENGAGE_M + 1.2
 ENGAGED_HOLD_S = 5.0          # nobody within DISENGAGE_M this long -> aware
 IDLE_TRACK_HZ = 2.0

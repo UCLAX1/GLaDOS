@@ -86,15 +86,15 @@ When nobody is around, the heavy features pause by themselves (`presence.py`). T
 | mode | when | what runs |
 |---|---|---|
 | **IDLE** | nobody seen for 10 s | tracking only, at 2 Hz. Any motion brings it to full speed at once |
-| **AWARE** | someone in view, further than 3 m | tracking + depth |
-| **ENGAGED** | someone within 3 m (no ZED: anyone in view), or a face is being registered | everything |
+| **AWARE** | someone in view, further than 2 m | tracking + depth |
+| **ENGAGED** | someone within 2 m (no ZED: anyone in view), or a face is being registered | everything |
 
 * Waking from idle took 0.5–0.6 s in tests, measured from the first frame with a person until everything was on.
-* Going back down has margins, so someone standing near the boundary doesn't flip it on and off. Engaged → aware happens only after 5 s further than 4.2 m. Aware → idle happens only after 10 s with nobody in view.
+* Going back down has margins, so someone standing near the boundary doesn't flip it on and off. Engaged → aware happens only after 5 s further than 3.2 m. Aware → idle happens only after 10 s with nobody in view.
 * The room check reports motion (none/low/medium/high), light (ok/dark/bright) and a blocked camera. It's shown on the panel and in `/status` under `presence`, along with `person_detected`, `person_count` and `nearest_m`.
 * It only *pauses* features. A feature you turned off by hand stays off, and face registration's own pause is left alone. If the controller ever stops, every pause lapses within 5 s.
 * Turn it off with `i`, the browser button, `--no-idle` or `DEMO_IDLE=0`. Keep it off for a stage demo if an idle-looking dashboard would confuse people. The self-test (`--check`) always runs with it off.
-* Tuning: `DEMO_IDLE_AFTER=10` (seconds), `DEMO_ENGAGE_M=3.0` (metres).
+* Tuning: `DEMO_IDLE_AFTER=10` (seconds), `DEMO_ENGAGE_M=2.0` (metres).
 
 ## Demo-day checklist
 
