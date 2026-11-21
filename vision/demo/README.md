@@ -21,7 +21,7 @@ python3 vision/demo/setup_demo.py
 
 Setup needs Python 3.9–3.12, because MediaPipe has no 3.13 wheels. On a Mac, run `brew install python@3.12`, then use `python3.12 vision/demo/setup_demo.py`.
 
-Setup creates `vision/demo/.venv`, installs everything and downloads all models, so the demo itself works offline. It finishes with a 30-second self-test that prints **GO** or **NOT READY**, with frame rate and time per frame for each feature.
+Setup creates `vision/demo/.venv`, installs everything and downloads all models, so the demo itself works offline. On the Jetson it also installs NVIDIA's GPU build of onnxruntime and builds a TensorRT engine for tracking. That takes about 8 minutes, once, and is cached in `vision/demo/models/trt_cache/`. It finishes with a 30-second self-test that prints **GO** or **NOT READY**, with frame rate and time per frame for each feature.
 
 * **insightface needs a C/C++ compiler.** On a Mac run `xcode-select --install`. On Windows install "Build Tools for Visual Studio". If it still fails, the demo runs without face recognition.
 * **Faces:** setup doesn't copy registered faces. Copy `vision/known_faces/*.npy` from another machine, or register people live with `r`.
@@ -72,8 +72,8 @@ vision/demo/.venv/bin/python vision/demo/run_demo.py            # Windows: visio
 
 **Registering faces:**
 * Only the person being registered may be in view. Sampling pauses while 2+ faces are visible, so a bystander can't be recorded under someone else's name.
-* Turn your head slowly until it reaches 15/15. That takes about 20–80 s on the Jetson and gives up after 90 s.
-* Tracking, gestures and expression **pause while registering**, so face recognition gets the CPU. They show as "paused" and resume when it finishes, is cancelled or times out.
+* Turn your head slowly until it reaches 15/15. That takes a few seconds when faces run on the GPU, and gives up after 90 s.
+* When faces run on the CPU (laptop, or GPU unavailable), tracking, gestures and expression **pause while registering** so face recognition gets the CPU. They show as "paused" and resume when it finishes, is cancelled or times out.
 * A face that's already registered under another name is refused, and the message says whose it is.
 * Names: each face labels one person only, a name belongs to one person at a time, and two "unknown" results in a row clear a wrong name.
 * Faces are saved to `vision/known_faces/<name>.npy`, which is gitignored.
@@ -90,15 +90,21 @@ vision/demo/.venv/bin/python vision/demo/run_demo.py            # Windows: visio
 
 ## Measured speed
 
-Each feature runs at its own rate. Jetson numbers were measured with everything running at once (recording, 1 person). Laptop numbers are estimates until the self-test runs there.
+Each feature runs at its own rate. Jetson numbers were measured with everything running at once (live ZED, 1 person). Laptop numbers are estimates until the self-test runs there.
 
-| | Jetson Orin Nano (CPU) | laptop (expected) |
-|---|---|---|
-| tracking | 6 Hz (ONNX, 320 px) | 15–30 Hz (torch, 640 px; MPS on a Mac) |
-| gestures | 11–12 Hz (lite models, capped at 12) | 15–25 Hz (full models) |
-| faces | ~0.4 Hz, plus at once for a new person | 1 Hz |
-| expression | ~5 Hz | 6 Hz (capped) |
+| | Jetson GPU (default) | Jetson CPU (fallback) | laptop (expected) |
+|---|---|---|---|
+| camera | 28 fps | 18–20 fps | 30 fps |
+| tracking | 28 Hz, 20 ms (TensorRT fp16) | 5–7 Hz, ~160 ms (ONNX) | 15–30 Hz (torch, 640 px; MPS on a Mac) |
+| gestures | 12 Hz (capped; MediaPipe stays on the CPU) | 9–10 Hz | 15–25 Hz |
+| faces | 33 ms per pass, 1 per second + at once for a new person | ~1.4 s per pass | 1 Hz |
+| expression | 6 Hz (capped), 11 ms | ~5 Hz, ~110 ms | 6 Hz (capped) |
 
-On the Jetson, each library's CPU threads are capped (`workers.onnx_threads`, torch 2 threads). Without the caps the libraries fought over 6 cores and tracking fell to about 1 Hz.
+**GPU on the Jetson.** Tracking runs YOLO26n as a TensorRT engine; face recognition and expression run on CUDA. All three go through `onnxruntime-gpu`, so torch stays the CPU build. Any part that can't use the GPU falls back to the CPU on its own, and the panel says which one each feature is using (`GPU TensorRT fp16`, `(GPU)`, `cpu`).
+* No TensorRT engine yet: tracking uses CUDA (~35 ms) and the panel says so. Build it with `setup_demo.py`, not at demo start, because it takes ~8 minutes.
+* The engine is specific to this GPU and these TensorRT/model versions. Re-exporting the model makes onnxruntime rebuild it, ~8 minutes at the next start, so run `setup_demo.py` after any model change.
+* To undo: `vision/demo/.venv/bin/pip uninstall -y onnxruntime-gpu && vision/demo/.venv/bin/pip install onnxruntime==1.23.2`.
 
-Environment overrides: `GESTURE_COMPLEXITY=0|1`, `DEMO_YOLO_IMGSZ=320`, `DEMO_FACE_PERIOD=1.0`, `DEMO_EXPR_HZ=6`, `ZED_DEPTH_MODE=PERFORMANCE`, `DEMO_ROTATE=180` (start_demo.sh), `DEMO_FACES_DIR=<dir>` (use another folder of known faces, e.g. for tests).
+On the CPU, each library's threads are capped (`workers.onnx_threads`, torch 2 threads). Without the caps the libraries fought over 6 cores and tracking fell to about 1 Hz.
+
+Environment overrides: `DEMO_TRACK_BACKEND=auto|gpu|cpu`, `DEMO_ONNX_GPU=0` (faces/expression on the CPU), `GESTURE_COMPLEXITY=0|1`, `DEMO_YOLO_IMGSZ=320`, `DEMO_FACE_PERIOD=1.0`, `DEMO_EXPR_HZ=6`, `ZED_DEPTH_MODE=PERFORMANCE`, `DEMO_ROTATE=180` (start_demo.sh), `DEMO_FACES_DIR=<dir>` (use another folder of known faces, e.g. for tests).

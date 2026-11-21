@@ -15,7 +15,7 @@ from collections import defaultdict, deque
 import cv2
 import numpy as np
 
-from workers import JETSON, Worker, onnx_threads
+from workers import JETSON, Worker, onnx_threads, sessions_to_gpu
 
 MAX_HZ = float(os.environ.get("DEMO_EXPR_HZ", "6"))
 
@@ -29,6 +29,8 @@ class ExpressionWorker(Worker):
         with onnx_threads(1 if JETSON else 0):
             import expression2 as ex             # builds detector + HSEmotion on import
         self.mp, self.ex = mp, ex
+        # HSEmotion asks for CPU; the GPU runs it ~7x faster (CPU fallback)
+        self.message = "HSEmotion " + sessions_to_gpu([ex.fer.ort_session], self.key)
         self.hist = defaultdict(lambda: deque(maxlen=ex.SMOOTHING_FRAMES))
         self.prev = []                           # [(key, cx, cy, w)]
         self.next_key = 0

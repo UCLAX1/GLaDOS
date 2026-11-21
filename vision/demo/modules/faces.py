@@ -31,7 +31,7 @@ import time
 
 import numpy as np
 
-from workers import JETSON, Worker, boxes_contain, onnx_threads
+from workers import JETSON, Worker, boxes_contain, onnx_threads, sessions_to_gpu
 
 PERIOD_S = float(os.environ.get("DEMO_FACE_PERIOD", "1.0"))
 SAMPLE_DIFF = 0.995        # skip samples this similar to one already taken (as face_memory)
@@ -39,6 +39,7 @@ SAME_PERSON = 0.30         # a new sample must be at least this similar to the e
 REGISTER_TIMEOUT_S = 90         # ~15 samples at the Jetson's ~1-4 s per face pass
 NAME_HOLD_S = 30           # keep a name for a track this long after its face was last seen
 # modules that stand aside during registration so face recognition gets the CPU
+# (only when faces run on the CPU)
 # (49 s -> see README for the measured time on the Jetson)
 PAUSE_WHILE_REGISTERING = ("track", "gesture", "expr")
 UNKNOWN_CLEARS = 2         # this many "unknown" results in a row clear a track's name
@@ -52,6 +53,7 @@ class FaceWorker(Worker):
     key, label, hotkey = "face", "Face recognition", "3"
     # defaults so the panel / browser can ask before load() has run
     known = {}
+    device = "CPU"
     registering = None
     register_status = ""
     track_names = {}
@@ -62,6 +64,8 @@ class FaceWorker(Worker):
         # buffalo_l also runs 2 landmark models and age/gender on every face;
         # recognition only needs the detector + embedding (~2x faster without them)
         fm.app.models = {k: m for k, m in fm.app.models.items() if k in ("detection", "recognition")}
+        # face_memory asks for CPU; on the Jetson GPU both models run ~13x faster (CPU fallback)
+        self.device = sessions_to_gpu([m.session for m in fm.app.models.values()], self.key)
         self.fm = fm
         # where known faces live; DEMO_FACES_DIR points tests (or a separate demo set) elsewhere
         self.faces_dir = os.environ.get("DEMO_FACES_DIR", fm.FACES_DIR)
@@ -88,7 +92,7 @@ class FaceWorker(Worker):
             self.known = known
             # drop names that no longer exist
             self.track_names = {k: v for k, v in self.track_names.items() if v["name"] in known}
-        self.message = f"{len(known)} known: {', '.join(known) or 'none'}"
+        self.message = f"{len(known)} known: {', '.join(known) or 'none'} ({getattr(self, 'device', 'CPU')})"
 
     def forget(self, name: str) -> str:
         path = os.path.join(self.faces_dir, f"{name}.npy")
@@ -123,7 +127,8 @@ class FaceWorker(Worker):
             return f"face recognition is {self.state}"
         self.samples, self.registering, self.register_t = [], name, time.time()
         self.register_status = f"registering {name}: only {name} in view, slowly turn your head"
-        self._pause_others(f"registering {name}")
+        if self.device != "GPU":                 # on the GPU a pass is ~35 ms: nothing to gain
+            self._pause_others(f"registering {name}")
         return self.register_status
 
     def _pause_others(self, why: str):

@@ -6,9 +6,13 @@ setup_demo.py — one command to get the vision demo running on a new machine.
     2. installs torch (CPU build on Linux/Windows, MPS-capable on Mac) and
        requirements-demo.txt
     3. on a Jetson with the ZED SDK, makes pyzed importable in the venv
-    4. downloads every model now, so the demo needs no internet on the day:
-       yolo26n.pt, InsightFace buffalo_l, HSEmotion, MediaPipe face detector
-    5. runs the demo headless for a few seconds and prints a go/no-go table
+    4. on a Jetson (JetPack 6, Python 3.10), swaps onnxruntime for NVIDIA's GPU
+       build, so tracking (TensorRT), faces and expression run on the GPU;
+       if that fails the CPU build goes back and the demo runs as before
+    5. downloads every model now, so the demo needs no internet on the day:
+       yolo26n.pt, InsightFace buffalo_l, HSEmotion, MediaPipe face detector;
+       on the Jetson also builds the TensorRT engine for tracking (~8 min, once)
+    6. runs the demo headless for a few seconds and prints a go/no-go table
 
 Usage (from the repo root; needs Python 3.9-3.12, MediaPipe has no 3.13 wheels):
     python3 vision/demo/setup_demo.py              # full setup + check
@@ -30,6 +34,9 @@ VISION = DEMO.parent
 VENV = DEMO / ".venv"
 MODELS = DEMO / "models"
 PY = VENV / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+# NVIDIA's onnxruntime build for JetPack 6 / CUDA 12.6 (CUDA + TensorRT), Python 3.10 only
+JETSON_ORT = "onnxruntime-gpu==1.23.0"
+JETSON_INDEX = "https://pypi.jetson-ai-lab.io/jp6/cu126"
 FACE_DETECTOR_URL = ("https://storage.googleapis.com/mediapipe-models/face_detector/"
                      "blaze_face_short_range/float16/latest/blaze_face_short_range.tflite")
 JETSON = platform.machine() == "aarch64" and Path("/etc/nv_tegra_release").exists()
@@ -70,6 +77,25 @@ def install():
     run(PY, "-m", "pip", "install", "-q", "--force-reinstall", "--no-deps", "opencv-contrib-python<4.12")
 
 
+def jetson_gpu():
+    """Replace onnxruntime with the Jetson GPU build. Any failure puts the CPU build back."""
+    release = Path("/etc/nv_tegra_release").read_text()
+    if not release.startswith("# R36") or sys.version_info[:2] != (3, 10):
+        print("  GPU onnxruntime needs JetPack 6 + Python 3.10: staying on the CPU build")
+        return
+    step(f"{JETSON_ORT} (GPU) in place of onnxruntime")
+    # both builds install the same `onnxruntime` package: never leave the two together
+    run(PY, "-m", "pip", "uninstall", "-q", "-y", "onnxruntime", "onnxruntime-gpu")
+    try:
+        run(PY, "-m", "pip", "install", "-q", JETSON_ORT, "numpy<2", "protobuf<5", "--extra-index-url", JETSON_INDEX)
+        run(PY, "-c", "import onnxruntime as o; p = o.get_available_providers(); print('  providers', p); "
+                      "assert 'CUDAExecutionProvider' in p")
+    except subprocess.CalledProcessError:
+        print("  GPU build failed: putting the CPU onnxruntime back (the demo runs on the CPU)")
+        subprocess.run([str(PY), "-m", "pip", "uninstall", "-q", "-y", "onnxruntime-gpu"], env=ENV)
+        run(PY, "-m", "pip", "install", "-q", "onnxruntime")
+
+
 def link_pyzed():
     """The ZED SDK installs pyzed for the system python; expose only that package to the venv."""
     out = subprocess.run(["python3", "-c", "import pyzed, os; print(os.path.dirname(pyzed.__file__))"],
@@ -108,6 +134,11 @@ print("  yolo26n.pt ok")
 if {JETSON!r} and not os.path.exists("yolo26n.onnx"):   # faster than torch on the Jetson CPU
     YOLO("yolo26n.pt").export(format="onnx", imgsz=320, verbose=False)
     print("  yolo26n.onnx exported")
+if {JETSON!r} and not os.path.exists("yolo26n_320_e2e.onnx"):   # GPU path: NMS-free (1, 300, 6) output
+    out = YOLO("yolo26n.pt").export(format="onnx", imgsz=320, end2end=True, verbose=False)
+    os.replace(out, "yolo26n_320_e2e.onnx")
+    YOLO("yolo26n.pt").export(format="onnx", imgsz=320, verbose=False)   # the export reused yolo26n.onnx's name
+    print("  yolo26n_320_e2e.onnx exported")
 from hsemotion_onnx.facial_emotions import HSEmotionRecognizer
 HSEmotionRecognizer(model_name="enet_b0_8_best_afew")
 print("  HSEmotion ok")
@@ -115,6 +146,30 @@ import face_memory                              # downloads buffalo_l to ~/.insi
 print("  InsightFace buffalo_l ok")
 """
     run(PY, "-c", code)
+    if JETSON:
+        build_trt()
+
+
+def build_trt():
+    """Build the TensorRT engine for tracking once; until then tracking uses CUDA, then the CPU."""
+    code = f"""
+import sys, time, numpy as np
+sys.path[:0] = [{str(DEMO)!r}, {str(DEMO / 'modules')!r}]
+import tracking as t
+if t.trt_engine_built():
+    print("  TensorRT engine already built"); sys.exit()
+try:
+    det = t.GpuDetector(allow_trt_build=True)
+except Exception as e:
+    print(f"  no GPU tracking ({{e}}): the demo uses the CPU"); sys.exit()
+print("  building the TensorRT engine for tracking (~8 min, only once)...", flush=True)
+t0 = time.time()
+det(np.zeros((320, 320, 3), np.uint8))
+print(f"  {{det.name}} ready in {{time.time() - t0:.0f}}s")
+"""
+    step("TensorRT engine for tracking")
+    if subprocess.run([str(PY), "-c", code], env=ENV).returncode != 0:
+        print("  engine build failed: tracking uses CUDA / the CPU instead")
 
 
 def check(source, seconds):
@@ -136,6 +191,7 @@ if __name__ == "__main__":
         make_venv()
         install()
         if JETSON:
+            jetson_gpu()
             link_pyzed()
         download_models()
     rc = check(args.source, args.seconds)

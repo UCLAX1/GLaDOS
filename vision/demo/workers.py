@@ -189,3 +189,43 @@ class onnx_threads:
     def __exit__(self, *exc):
         if self.n:
             self.ort.InferenceSession = self.orig
+
+
+# ── GPU ───────────────────────────────────────────────────────────────────────
+
+GPU_PROVIDERS = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+
+
+def onnx_gpu_available() -> bool:
+    """onnxruntime-gpu installed (setup_demo.py does it on the Jetson) and not turned off with DEMO_ONNX_GPU=0."""
+    import os
+    if os.environ.get("DEMO_ONNX_GPU", "1") == "0":
+        return False
+    try:
+        import onnxruntime as ort
+        return "CUDAExecutionProvider" in ort.get_available_providers()
+    except Exception:
+        return False
+
+
+def sessions_to_gpu(sessions, tag) -> str:
+    """
+    Move already-built onnxruntime sessions (InsightFace, HSEmotion: their code asks for
+    CPU only) onto CUDA. Any failure leaves them on the CPU, where they worked before.
+    Returns "GPU" or "CPU" for the panel.
+    """
+    if not onnx_gpu_available():
+        return "CPU"
+    try:
+        for s in sessions:
+            s.set_providers(GPU_PROVIDERS)
+        if all(s.get_providers()[0] == "CUDAExecutionProvider" for s in sessions):
+            return "GPU"
+    except Exception as e:
+        print(f"[{tag}] GPU unavailable ({e}); staying on CPU", file=sys.stderr)
+    for s in sessions:
+        try:
+            s.set_providers(["CPUExecutionProvider"])
+        except Exception:
+            pass
+    return "CPU"
