@@ -40,8 +40,13 @@ class RobotContext:
     # relative to the elbow, where the no rotation means the platform is horizontal relative to the elbow
     self.target_head_rotation = R.from_quat([0, 0, 0, 1])
 
+    # global target angles for the head
     self.target_head_yaw = 0.0
     self.target_head_pitch = 0.0
+
+    # actual target angles for the stewart platform
+    self.target_head_yaw_correction = 0.0
+    self.target_head_pitch_correction = 0.0
 
     # motor angles 
     self.base_angle = 0.0 # azimuth, 0 is along +x
@@ -49,11 +54,11 @@ class RobotContext:
     self.elbow_angle = 0.0 # zenith, 0 is parallel to shoulder
 
   def get_target_angles(self):
-    arm_angles = [
+    arm_angles = (
       self.base_angle, 
       self.shoulder_angle, 
       self.elbow_angle,
-    ]
+    )
 
     return arm_angles, self.target_head_rotation
 
@@ -68,18 +73,25 @@ class RobotContext:
     self.target_head_yaw = target_head_yaw
     self.target_head_pitch = target_head_pitch
 
-    self.solve_ik(
+    arm_angles, head_yaw_pitch_correction_angles = self.solve_ik(
       self.target_arm_position_vector, 
       self.target_head_yaw, 
       self.target_head_pitch,
     )
+
+    self.base_angle, self.shoulder_angle, self.elbow_angle = arm_angles
+    self.head_yaw_correction_angle, self.head_pitch_correction_angle = head_yaw_pitch_correction_angles
+
+    self.target_head_rotation = R.from_euler("zyx", [
+      0.0, 
+      self.head_yaw_correction_angle, 
+      self.head_pitch_correction_angle
+    ])
+
   
-  # vectors are in global space
-  def solve_ik(
-    self, 
+  def solve_arm_ik(
+    self,
     target_arm_position_vector,
-    target_head_yaw,
-    target_head_pitch,
   ):
     # T
     arm_vector_length = np.linalg.norm(target_arm_position_vector)
@@ -88,14 +100,14 @@ class RobotContext:
     arm_vector_z = target_arm_position_vector[2]
 
 
-    self.base_angle = np.atan2(arm_vector_y, arm_vector_x)
+    base_angle = np.atan2(arm_vector_y, arm_vector_x)
 
     shoulder_angle_cos = (self.shoulder_length**2.0 + arm_vector_length**2.0 - self.elbow_length**2.0) / (2.0 * self.shoulder_length * arm_vector_length)
     shoulder_angle_cos = np.clip(shoulder_angle_cos, -1.0, 1.0)
     # if np.abs(shoulder_angle_cos) > 1:
     #   print("CLAMPING SHOULDER ANGLE")
     #   shoulder_angle_cos = np.sign(shoulder_angle_cos)
-    self.shoulder_angle = np.pi - np.arccos(arm_vector_z / arm_vector_length) - np.arccos(shoulder_angle_cos)
+    shoulder_angle = np.pi - np.arccos(arm_vector_z / arm_vector_length) - np.arccos(shoulder_angle_cos)
     # print(np.arccos(arm_vector_z / arm_vector_length), np.arccos(shoulder_angle_cos))
 
     elbow_angle_cos = (arm_vector_length**2.0 - self.shoulder_length**2.0 - self.elbow_length**2.0) / (2.0 * self.shoulder_length * self.elbow_length)
@@ -103,9 +115,19 @@ class RobotContext:
     # if np.abs(elbow_angle_cos) > 1:
     #   print("CLAMPING ELBOW ANGLE")
     #   elbow_angle_cos = np.sign(elbow_angle_cos)
-    self.elbow_angle = np.arccos(elbow_angle_cos)
+    elbow_angle = np.arccos(elbow_angle_cos)
 
     # global_elbow_angle = np.pi - (self.shoulder_angle + self.elbow_angle)
+
+    return base_angle, shoulder_angle, elbow_angle
+
+  def solve_head_ik(
+    self, 
+    target_arm_position_vector,
+    target_head_yaw,
+    target_head_pitch,
+  ):
+    base_angle, shoulder_angle, elbow_angle = self.solve_arm_ik(target_arm_position_vector)
 
     # how much the head has to rotate in pitch so the head angle matches target_head_pitch
     head_pitch_correction_angle = -(self.shoulder_angle + self.elbow_angle + target_head_pitch - np.pi / 2.0)
@@ -114,21 +136,30 @@ class RobotContext:
     head_yaw_correction_angle = -(target_head_yaw - self.base_angle)
     head_yaw_correction_angle = np.clip(head_yaw_correction_angle, -self.max_head_yaw_correction, self.max_head_yaw_correction)
 
+    return head_yaw_correction_angle, head_pitch_correction_angle
+
+  
+  # vectors are in global space
+  def solve_ik(
+    self, 
+    target_arm_position_vector,
+    target_head_yaw,
+    target_head_pitch,
+  ):
+    base_angle, shoulder_angle, elbow_angle = self.solve_arm_ik(target_arm_position_vector)
+    head_yaw_correction_angle, head_pitch_correction_angle = self.solve_head_ik(target_arm_position_vector, target_head_yaw, target_head_pitch)
+
     # mocap_head_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "debug_target_head")
     # mocap_head_idx = m.body_mocapid[mocap_head_id]
     # data.mocap_pos[mocap_head_idx] = self.target_arm_position_vector + self.head_radius * np.array([np.cos(target_head_pitch) * np.cos(target_head_yaw), np.cos(target_head_pitch) * np.sin(target_head_yaw), -np.sin(target_head_pitch)]) + np.array([0, 0, 2.4])
-
-    self.target_head_rotation = R.from_euler("zyx", [
-      0.0, 
-      head_yaw_correction_angle, 
-      head_pitch_correction_angle
-    ])
 
     # mocap_id = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "debug_target_head")
     # mocap_idx = m.body_mocapid[mocap_id]
     # data.mocap_pos[mocap_idx] = self.target_arm_position_vector + self.head_radius * self.target_head_rotation.inv().apply([0, 0, -1]) + np.array([0, 0, 2.4])
 
-    return self.get_target_angles()
+
+    return (base_angle, shoulder_angle, elbow_angle), (head_yaw_correction_angle, head_pitch_correction_angle)
+
 
   def move_arm(self):
     base_motor_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, "base_motor")

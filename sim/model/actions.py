@@ -5,6 +5,14 @@ from py_trees.common import Status
 from py_trees.composites import Sequence
 from py_trees import logging as log_tree
 from robot_context import RobotContext
+import numpy as np
+
+# r theta
+def spherical_to_cartesian(spherical_coords):
+    r = spherical_coords[0]
+    theta = spherical_coords[1]
+    phi = spherical_coords[2]
+    return r * np.array([np.cos(theta) * np.sin(phi), np.sin(theta) * np.sin(phi), np.cos(phi)])
 
 
 class MoveArm(Behaviour):
@@ -12,66 +20,50 @@ class MoveArm(Behaviour):
             self, 
             name, 
             robot_context: RobotContext,
-            target_arm_position_vector,
+            target_spherical_coords, # r, theta, phi
+            target_head_yaw,
+            target_head_pitch,
         ):
-        super(Action, self).__init__(name)
+        super(MoveArm, self).__init__(name)
 
-        self.arm_solver.set_target_pose(target_arm_position_vector, head_yaw, head_pitch)
-        self.target_arm_angles, self.target_head_rotation = self.arm_solver.get_target_angles()
+        self.robot_context = robot_context
+        self.target_spherical_coords = target_spherical_coords
+        self.target_arm_position_vector = spherical_to_cartesian(target_spherical_coords)
+        self.target_head_yaw = target_head_yaw
+        self.target_head_pitch = target_head_pitch
 
+        self.start_time = 0
     
     
     def setup(self):
         self.logger.debug(f"MoveArm::setup {self.name}")
-        init_sliders()
 
     def initialise(self):
         self.logger.debug(f"MoveArm::initialise {self.name}")
         # move arm
 
-        base_angle = self.target_arm_angles[0]
-        shoulder_angle = self.target_arm_angles[1]
-        elbow_angle = self.target_arm_angles[2]
+        self.robot_context.set_target_pose_and_solve_ik(self.target_arm_position_vector, self.target_head_yaw, self.target_head_pitch)
+        self.robot_context.move_head()
+        self.robot_context.move_arm()
 
-        base_motor_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, "base_motor")
-        shoulder_motor_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, "shoulder_motor")
-        elbow_motor_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, "elbow_motor")
-
-        data.ctrl[base_motor_id] = base_angle
-        data.ctrl[shoulder_motor_id] = shoulder_angle
-        data.ctrl[elbow_motor_id] = elbow_angle
-
-        # move head
-        euler_angles = self.target_rotation.as_euler("zyx")
-        angle_x = euler_angles[2]
-        angle_y = euler_angles[1]
-        angle_z = euler_angles[0]
-
-        x_motor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "head_motor_x")
-        y_motor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "head_motor_y")
-        z_motor_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "head_motor_z")
-
-        data.ctrl[x_motor_id] = angle_x
-        data.ctrl[y_motor_id] = angle_y
-        data.ctrl[z_motor_id] = angle_z
-        # pass
+        self.start_time = time.time()
 
     def update(self):
         self.logger.debug(f"MoveArm::update {self.name}")
         # TODO: put code here to only return success when the motor reaches the target destination, otherwise return Status.RUNNING
-        # status = Status.SUCCESS
-        status = Status.RUNNING
+        status = Status.SUCCESS
+        if time.time() - self.start_time < 5:
+            status = Status.RUNNING
         return status
         # pass
 
     def terminate(self, new_status):
         self.logger.debug(f"MoveArm::terminate {self.name} to {new_status}")
+        exit(0)
         # pass
 
 def make_bt(
-        model, 
-        data, 
-        arm_solver: ArmSolver, 
+    robot_context: RobotContext
     ):
     # root = Sequence(name="sequence", memory=True)
     # action = Action("my action")
@@ -82,5 +74,5 @@ def make_bt(
 
     # return root
 
-    move_arm = MoveArm("move_arm", model, data, arm_solver)
+    move_arm = MoveArm("move_arm", robot_context, [1.3, np.deg2rad(0), np.deg2rad(148)], np.deg2rad(0), np.deg2rad(0))
     return move_arm

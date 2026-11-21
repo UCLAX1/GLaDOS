@@ -4,7 +4,7 @@ from scipy.spatial.transform import Rotation as R
 from robot_context import RobotContext
 
 from py_trees import logging as log_tree
-# from actions import make_bt
+from actions import make_bt
 
 import mujoco
 import mujoco.viewer
@@ -49,10 +49,6 @@ np.set_printoptions(precision=2, suppress=True)
 model = mujoco.MjModel.from_xml_path('./new_glados.mujoco.xml')
 data = mujoco.MjData(model)
 
-# tree = make_bt()
-# tree.tick_once()
-# exit(0)
-
 
 with mujoco.viewer.launch_passive(model, data) as viewer:
 
@@ -86,37 +82,36 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
   data.ctrl[arm_phi_slider_id] = 180
   data.ctrl[arm_radius_slider_id] = 1.3
 
+  tree = make_bt(robot_context)
 
   # Close the viewer automatically after 30 wall-seconds.
   start = time.time()
   while viewer.is_running():
     step_start = time.time()
 
+    tree.tick_once()
+
+
     # mujoco.mj_kinematics(m, d)
 
-    head_yaw = np.deg2rad(data.ctrl[head_yaw_slider_id])
-    head_pitch = np.deg2rad(data.ctrl[head_pitch_slider_id])
+    # head_yaw = np.deg2rad(data.ctrl[head_yaw_slider_id])
+    # head_pitch = np.deg2rad(data.ctrl[head_pitch_slider_id])
 
-    arm_theta = np.deg2rad(data.ctrl[arm_theta_slider_id])
-    arm_phi = np.deg2rad(data.ctrl[arm_phi_slider_id])
-    arm_radius = data.ctrl[arm_radius_slider_id]
+    # arm_theta = np.deg2rad(data.ctrl[arm_theta_slider_id])
+    # arm_phi = np.deg2rad(data.ctrl[arm_phi_slider_id])
+    # arm_radius = data.ctrl[arm_radius_slider_id]
 
-    target_arm_position_vector = arm_radius * np.array([np.cos(arm_theta) * np.sin(arm_phi), np.sin(arm_theta) * np.sin(arm_phi), np.cos(arm_phi)])
+    # target_spherical_coords = [arm_radius, arm_phi, arm_theta]
+    # target_arm_position_vector = arm_radius * np.array([np.cos(arm_theta) * np.sin(arm_phi), np.sin(arm_theta) * np.sin(arm_phi), np.cos(arm_phi)])
 
-    mocap_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "debug_target")
-    mocap_idx = model.body_mocapid[mocap_id]
-    data.mocap_pos[mocap_idx] = target_arm_position_vector + np.array([0, 0, 2.4])
+    # mocap_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "debug_target")
+    # mocap_idx = model.body_mocapid[mocap_id]
+    # data.mocap_pos[mocap_idx] = target_arm_position_vector + np.array([0, 0, 2.4])
 
-    robot_context.set_target_pose_and_solve_ik(target_arm_position_vector, head_yaw, head_pitch)
+    # robot_context.set_target_pose_and_solve_ik(target_arm_position_vector, head_yaw, head_pitch)
 
-    robot_context.move_arm()
-    robot_context.move_head()
-
-    # target_arm_angles, target_head_rotation = arm_solver.get_target_angles()
-
-    # move_arm(model, data, *target_arm_angles)
-
-    # move_head(model, data, target_head_rotation)
+    # robot_context.move_arm()
+    # robot_context.move_head()
 
 
     # mj_step can be replaced with code that also evaluates
