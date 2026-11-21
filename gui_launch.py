@@ -75,9 +75,17 @@ LLAMA_CMD  = os.environ.get("LLAMA_SERVER") or _find_llama()
 MONO       = {"darwin": "Menlo", "win32": "Consolas"}.get(sys.platform, "DejaVu Sans Mono")
 HOST_LABEL = {"darwin": "MAC", "win32": "PC"}.get(sys.platform, "HOST")
 JETSON_IP  = os.environ.get("JETSON_IP", "")
-if JETSON_IP.strip().lower() in ("none", "off", "0"):      # explicit "no vision"
+_NO_VISION = JETSON_IP.strip().lower() in ("none", "off", "0")   # explicit "no vision"
+if _NO_VISION:
     JETSON_IP = ""
     os.environ["JETSON_IP"] = ""
+# Where vision comes from:
+#   auto   (default) the Jetson if it answers, else the vision demo on THIS
+#          machine's webcam (if vision/demo is set up here), else no vision
+#   jetson | local | none   force one of them
+VISION_MODE = os.environ.get("VISION_MODE", "none" if _NO_VISION else "auto").strip().lower()
+LOCAL_VISION_PORT = int(os.environ.get("LOCAL_VISION_PORT", "8091"))
+VISION_SOURCE = "jetson"           # set by choose_vision(): jetson | local | none
 # Silence needed before an utterance counts as finished. Shorter = snappier; a
 # pause that turns out not to be the end is handled by the pipeline (the two
 # halves are merged retroactively), so this can be well under the old 640 ms.
@@ -333,30 +341,63 @@ def _usage_loop():
         time.sleep(2)
 
 
+# Latest-frame mailbox between the camera thread and the GUI. Emitting every
+# frame as a Qt event lets them queue up whenever the GUI is slower than the
+# camera: the video falls further and further behind and every other GUI event
+# waits behind the backlog. Instead the worker decodes and scales off the GUI
+# thread and keeps only the newest frame; a GUI timer picks it up. (No
+# handshake: a lost ping can never stall the feed.)
+_cam_lock    = threading.Lock()
+_cam_latest  = None            # QImage, already scaled to the label
+_cam_seq     = 0               # bumped per new frame
+_cam_target  = (960, 540)      # label size, updated by the GUI
+CAM_MAX_FPS  = 20
+
+
 def _cam_feed_loop(signals):
-    """Pull MJPEG frames from the Jetson demo stream and emit as raw JPEG bytes."""
+    """Pull MJPEG frames from the Jetson; deliver only the newest, ready to paint."""
+    global _cam_latest, _cam_seq
     if not JETSON_IP:
         return
-    url = f"http://{JETSON_IP}:{os.environ.get('VISION_DEMO_PORT', '8081')}/stream"
-    buf = b""
+    # lite=1: 960 px / q60 / ≤15 fps — the full stream (~25 Mbit/s) swamps campus Wi-Fi
+    url = f"http://{JETSON_IP}:{os.environ.get('VISION_DEMO_PORT', '8081')}/stream?lite=1"
     while True:
+        buf = b""
         try:
             req = urllib.request.urlopen(url, timeout=5)
+            t_last = 0.0
             while True:
-                chunk = req.read(4096)
+                # read1: return whatever has arrived — read(n) would block until
+                # n bytes, i.e. hold back small frames until several had queued
+                chunk = req.read1(65536)
                 if not chunk:
                     break
                 buf += chunk
-                # Scan for JPEG start/end markers
-                s = buf.find(b"\xff\xd8")
-                e = buf.find(b"\xff\xd9", s + 2) if s != -1 else -1
-                if s != -1 and e != -1:
-                    signals.cam_frame.emit(buf[s:e + 2])
-                    buf = buf[e + 2:]
-                    if len(buf) > 1 << 20:   # safety: drop if buffer bloats
+                # Skip to the NEWEST complete frame in the buffer
+                e = buf.rfind(b"\xff\xd9")
+                if e == -1:
+                    if len(buf) > 4 << 20:
                         buf = b""
-        except Exception:
-            buf = b""
+                    continue
+                s_ = buf.rfind(b"\xff\xd8", 0, e)
+                if s_ == -1:
+                    buf = buf[e + 2:]
+                    continue
+                jpg, buf = buf[s_:e + 2], buf[e + 2:]
+                now = time.time()
+                if now - t_last < 1.0 / CAM_MAX_FPS:
+                    continue
+                t_last = now
+                img = QImage.fromData(jpg, "JPG")
+                if img.isNull():
+                    continue
+                w, h = _cam_target
+                img = img.scaled(max(1, w), max(1, h), Qt.KeepAspectRatio, Qt.FastTransformation)
+                with _cam_lock:
+                    _cam_latest = img
+                    _cam_seq += 1
+        except Exception as e:
+            print(f"[camera] stream error: {e!r} — retrying")
             time.sleep(2)
 
 
@@ -474,7 +515,7 @@ class Signals(QObject):
     pipe_done   = Signal()           # finished speaking
     pipe_action = Signal(str)        # current gesture/action name
     # camera
-    cam_frame   = Signal(bytes)      # raw JPEG bytes from Jetson MJPEG stream
+    cam_frame   = Signal(bytes)      # "new camera frame ready" ping (frame is in _cam_latest)
     perception  = Signal(str)        # latest perception context string
 
 # ── Pipeline bar ──────────────────────────────────────────────────────────────
@@ -808,6 +849,11 @@ class AdminConsole(QDialog):
         sec6, lay6 = _section("RAW LOG")
         self.raw_log = QTextEdit()
         self.raw_log.setReadOnly(True)
+        self.raw_log.document().setMaximumBlockCount(1500)   # keep it from growing forever
+        self._log_buf: list[str] = []
+        self._log_timer = QTimer(self)
+        self._log_timer.timeout.connect(self._flush_log)
+        self._log_timer.start(200)
         self.raw_log.setFont(QFont(MONO, 8))
         self.raw_log.setStyleSheet(
             "background: #0a0a0a; color: #555; border: 1px solid #222; border-radius: 3px;"
@@ -908,11 +954,18 @@ class AdminConsole(QDialog):
         self._log_line.emit(line)
 
     def _append_log(self, line: str):
+        self._log_buf.append(line)            # painted in batches by _flush_log
+
+    def _flush_log(self):
+        if not self._log_buf:
+            return
+        lines, self._log_buf = self._log_buf[-500:], []
         cur = self.raw_log.textCursor()
         cur.movePosition(QTextCursor.End)
-        self.raw_log.setTextCursor(cur)
-        self.raw_log.insertPlainText(line + "\n")
-        self.raw_log.ensureCursorVisible()
+        cur.insertText("\n".join(lines) + "\n")
+        if self.isVisible():
+            self.raw_log.setTextCursor(cur)
+            self.raw_log.ensureCursorVisible()
 
     def _sync_inject(self, *_):
         """Mirror the inject box into plain globals the brain thread can read safely."""
@@ -990,7 +1043,7 @@ class GladosWindow(QMainWindow):
                 ram = f"&nbsp; ram {j['ram_used_gb']:.1f}/{j['ram_total_gb']:.0f}G {pct(ram_pct)}"
             temp = max([t for t in (j.get("cpu_temp_c"), j.get("gpu_temp_c")) if t is not None],
                        default=None)
-            jet = (f"<b>JETSON</b>&nbsp;cpu {pct(j.get('cpu_pct'))}&nbsp; gpu {pct(j.get('gpu_pct'))}"
+            jet = (f"<b>{VISION_LABEL}</b>&nbsp;cpu {pct(j.get('cpu_pct'))}&nbsp; gpu {pct(j.get('gpu_pct'))}"
                    f"{ram}")
             extra = []
             if temp is not None:
@@ -1001,20 +1054,23 @@ class GladosWindow(QMainWindow):
             if extra:
                 jet += "<br><span style='color:#666'>&nbsp;&nbsp;" + " · ".join(extra) + "</span>"
         else:
-            jet = "<b>JETSON</b>&nbsp;<span style='color:#555'>no stats (demo not reachable or old version)</span>"
+            jet = (f"<b>{VISION_LABEL}</b>&nbsp;<span style='color:#555'>"
+                   + ("no vision source" if VISION_SOURCE == "none" else "no stats yet") + "</span>")
 
         self.box_sys.setText(mac + "<br>" + jet)
 
     def _refresh_vision_box(self):
         if not JETSON_IP:
-            self.box_vision.setText("<span style='color:#a55'>● off</span> — JETSON_IP not set")
+            self.box_vision.setText("<span style='color:#a55'>● off</span> — no camera "
+                                    "(voice, brain and sim still work)")
             return
         s   = vision.latest()
         age = time.time() - vision.last_ok_t if vision.last_ok_t else None
         if not vision.is_connected():
             err = (vision.last_error or "waiting…")[:70]
+            where = "local camera (starting…)" if VISION_SOURCE == "local" else JETSON_IP
             self.box_vision.setText(
-                f"<span style='color:#c55'>● no data</span> from {JETSON_IP}<br>"
+                f"<span style='color:#c55'>● no data</span> from {where}<br>"
                 f"<span style='color:#666'>{err}</span>"
             )
             return
@@ -1248,7 +1304,10 @@ class GladosWindow(QMainWindow):
         cam_bar.addWidget(self.perception_lbl)
         cam_row.addLayout(cam_bar)
 
-        self.cam_lbl = QLabel("waiting for Jetson stream…")
+        self.cam_lbl = QLabel({
+            "jetson": "waiting for Jetson stream…",
+            "local":  "starting local camera (first start loads the vision models)…",
+        }.get(VISION_SOURCE, "no camera — running without vision\n(start the Jetson, or run vision/demo/setup_demo.py on this machine for webcam vision)"))
         self.cam_lbl.setAlignment(Qt.AlignCenter)
         # Explicit minimum so the scaled pixmap never blocks shrinking
         self.cam_lbl.setMinimumSize(160, 120)
@@ -1273,7 +1332,10 @@ class GladosWindow(QMainWindow):
         s.pipe_speak.connect(self._on_speak)
         s.pipe_done.connect(self._on_done)
         s.pipe_action.connect(self._on_action)
-        s.cam_frame.connect(self._on_cam_frame)
+        self._cam_shown = -1
+        self._cam_timer = QTimer(self)
+        self._cam_timer.timeout.connect(self._on_cam_frame)
+        self._cam_timer.start(1000 // CAM_MAX_FPS)
         s.perception.connect(self.perception_lbl.setText)
 
     # ── Box update handlers ────────────────────────────────────────────────────
@@ -1321,14 +1383,16 @@ class GladosWindow(QMainWindow):
     def _on_action(self, name: str):
         self.action_lbl.setText(name.replace("_", " ") if name else "")
 
-    def _on_cam_frame(self, jpg: bytes):
-        img = QImage.fromData(jpg, "JPG")
-        if img.isNull():
+    def _on_cam_frame(self, _unused: bytes = b""):
+        """GUI timer: paint the newest camera frame if there is a new one."""
+        global _cam_target
+        _cam_target = (self.cam_lbl.width(), self.cam_lbl.height())
+        with _cam_lock:
+            img, seq = _cam_latest, _cam_seq
+        if img is None or seq == self._cam_shown:
             return
-        w = max(1, self.cam_lbl.width())
-        h = max(1, self.cam_lbl.height())
-        pix = QPixmap.fromImage(img).scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        self.cam_lbl.setPixmap(pix)
+        self._cam_shown = seq
+        self.cam_lbl.setPixmap(QPixmap.fromImage(img))
 
     def _open_admin(self):
         self.admin_console.show()
@@ -1400,7 +1464,7 @@ def _llama_reader(proc: subprocess.Popen, signals: "Signals"):
     for raw in proc.stdout:
         line = raw.decode(errors="replace").rstrip()
         print(line)
-        if _admin_console is not None:
+        if _admin_console is not None and (" E " in line or "error" in line.lower()):
             _admin_console.push_log(line)
         m = pat_timing.search(line)
         if m:
@@ -1429,6 +1493,9 @@ def _llama_reader(proc: subprocess.Popen, signals: "Signals"):
             signals.metrics.emit("llm", f"llm  prefill {prefill}  gen {gen}  {total}  [{hit_pct}]")
 
 
+_tts_ready = threading.Event()   # set when the speech daemon has loaded its model
+
+
 def _tts_reader(proc: subprocess.Popen, signals: "Signals"):
     """Forward the speech daemon's events ([speak-start] …) to the pipeline."""
     import json as _json
@@ -1436,6 +1503,8 @@ def _tts_reader(proc: subprocess.Popen, signals: "Signals"):
         line = raw.decode(errors="replace").rstrip()
         print(line)
         _log(line)
+        if line.startswith("GLaDOS daemon ready"):
+            _tts_ready.set()
         if not line.startswith("["):
             continue
         tag, _, rest = line[1:].partition("] ")
@@ -1484,10 +1553,73 @@ def shutdown():
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
+VISION_LABEL = "JETSON"
+
+
+def _vision_up(ip: str, port: int, timeout: float = 1.5) -> bool:
+    try:
+        urllib.request.urlopen(f"http://{ip}:{port}/status", timeout=timeout).read()
+        return True
+    except Exception:
+        return False
+
+
+def choose_vision() -> None:
+    """
+    Decide where vision comes from, so the demo runs with or without the Jetson:
+    Jetson if reachable → else the vision demo on this machine's webcam → else none.
+    """
+    global JETSON_IP, VISION_SOURCE, VISION_LABEL
+    port = int(os.environ.get("VISION_DEMO_PORT", "8081"))
+    mode = VISION_MODE
+    if not JETSON_IP and mode == "auto":
+        mode = "local"                      # no Jetson configured: try the webcam
+
+    if mode in ("auto", "jetson") and JETSON_IP:
+        if mode == "jetson" or _vision_up(JETSON_IP, port):
+            VISION_SOURCE, VISION_LABEL = "jetson", "JETSON"
+            print(f"[vision] using the Jetson at {JETSON_IP}:{port}")
+            return
+        print(f"[vision] Jetson at {JETSON_IP}:{port} not answering")
+
+    if mode in ("auto", "local"):
+        win = os.name == "nt"
+        vpy = ROOT / "vision" / "demo" / ".venv" / ("Scripts/python.exe" if win else "bin/python")
+        started = False
+        if vpy.exists():
+            if _vision_up("127.0.0.1", LOCAL_VISION_PORT, timeout=0.5):
+                started = True                      # already running from a previous start
+            else:
+                log = SPEECH_QUEUE_DIR.parent / "glados_local_vision.log"
+                try:
+                    start_proc([str(vpy), "vision/demo/run_demo.py", "--source", "auto",
+                                "--no-window", "--web", str(LOCAL_VISION_PORT)],
+                               "local vision (webcam)", stdout=open(log, "w"))
+                    started = True
+                    print(f"[vision] local vision log: {log}  (macOS: allow camera access "
+                          "for your terminal app if the camera stays dark)")
+                except Exception as e:
+                    print(f"[vision] could not start local vision: {e!r}")
+        if started:
+            JETSON_IP, VISION_SOURCE, VISION_LABEL = "127.0.0.1", "local", "LOCAL VISION"
+            os.environ["VISION_DEMO_PORT"] = str(LOCAL_VISION_PORT)
+            vision.set_target("127.0.0.1", LOCAL_VISION_PORT)
+            print(f"[vision] using this machine's camera (vision demo on :{LOCAL_VISION_PORT})")
+            return
+        if not vpy.exists():
+            print("[vision] vision/demo is not set up on this machine "
+                  "(python3 vision/demo/setup_demo.py) — continuing without vision")
+
+    JETSON_IP, VISION_SOURCE, VISION_LABEL = "", "none", "VISION"
+    vision.set_target("")
+    print("[vision] running WITHOUT vision — voice, brain and sim work as normal")
+
+
 def main():
     global daemon_proc, _admin_console, _signals, listener
 
     clear_queues()
+    choose_vision()
     vision.start()
 
     # Start the LLM server and the speech daemon together — both take seconds to
@@ -1534,8 +1666,16 @@ def main():
         model_final="distil-small.en",
         gap_chunks=GAP_MS // 32,
     )
-    threading.Thread(target=listener.start, daemon=True, name="listener").start()
-    signals.status.emit("listening")
+    def _start_listening():
+        # Speaking before the voice is loaded would make the first reply wait
+        # for the model load (seconds). Hold the mic until it is ready.
+        if not _tts_ready.wait(timeout=120):
+            print("[launch] speech daemon not ready after 120 s — starting the mic anyway")
+        else:
+            print("[launch] voice ready — mic open")
+        signals.status.emit("listening")
+        listener.start()
+    threading.Thread(target=_start_listening, daemon=True, name="listener").start()
 
     win = GladosWindow(signals)
     _admin_console = win.admin_console

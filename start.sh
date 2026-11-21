@@ -9,7 +9,9 @@
 # Start the Jetson first, then the Mac. Ctrl-C (or closing the window) stops everything.
 #
 # Options (environment variables):
-#   JETSON_IP=100.73.92.3   Jetson address (Mac side). Empty = run without vision.
+#   JETSON_IP=100.73.92.3   Jetson address (Mac side)
+#   VISION_MODE=auto        auto: Jetson if it answers, else this Mac's webcam (needs
+#                           vision/demo set up here), else no vision.  jetson | local | none
 #   WEB_PORT=8081           vision port (both sides must agree; Mac: VISION_DEMO_PORT)
 #   GLADOS_GAP_MS=480       silence before an utterance counts as finished
 #   LLAMA_ARGS="-t 8"       extra llama-server flags
@@ -25,8 +27,9 @@ if [ "$(uname -s)" = "Darwin" ]; then
     # A previous run that did not exit cleanly would hold the port and the model
     pkill -f "llama-server.*--port 8080" 2>/dev/null || true
     pkill -f "speech/glados_daemon.py"   2>/dev/null || true
+    pkill -f "vision/demo/run_demo.py.*--web 8091" 2>/dev/null || true
 
-    echo "GLaDOS — Mac   (vision from: ${JETSON_IP:-none})"
+    echo "GLaDOS — Mac   (vision: ${VISION_MODE:-auto}, Jetson ${JETSON_IP:-none})"
     exec listening/venv/bin/python gui_launch.py
 else
     # ── Jetson ────────────────────────────────────────────────────────────────

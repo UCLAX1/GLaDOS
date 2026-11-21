@@ -7,6 +7,9 @@
 #   Mac    → brain, voice, listening, sim, GUI   (listening/venv)
 #   Jetson → camera + vision                      (vision/demo/.venv)
 #
+#   ./setup.sh vision   (Mac) also set up webcam vision on the Mac, used
+#                       automatically when the Jetson is not reachable
+#
 # Safe to re-run; it only installs what is missing.
 set -e
 cd "$(dirname "$0")"
@@ -55,6 +58,17 @@ if [ "$(uname -s)" = "Darwin" ]; then
         listening/venv/bin/python -m pip install -q huggingface_hub
         listening/venv/bin/python -c "from huggingface_hub import hf_hub_download as d; d('prism-ml/Bonsai-8B-gguf','Bonsai-8B-Q1_0.gguf',local_dir='central_ai/benchmarking_tools')" \
             || warn "download failed — put Bonsai-8B-Q1_0.gguf at $GGUF"
+    fi
+
+    # Optional: webcam vision on this Mac (fallback when the Jetson is not there)
+    if [ "${1:-}" = "vision" ]; then
+        say "Webcam vision on this Mac"
+        "$PY" vision/demo/setup_demo.py
+    elif [ -x vision/demo/.venv/bin/python ]; then
+        ok "webcam vision (fallback when the Jetson is unreachable)"
+    else
+        warn "no webcam vision on this Mac — without the Jetson the demo runs without vision."
+        echo "      To use the Mac's webcam instead:  ./setup.sh vision"
     fi
 
     say "Done. Start with:  ./start.sh"
