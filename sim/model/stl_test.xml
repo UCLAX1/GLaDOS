@@ -1,0 +1,23 @@
+
+<mujoco model="pushrod_stl_test">
+
+    <compiler meshdir="../assets/meshes"/>
+
+    <asset>
+        <mesh name="pushrod"
+              file="PushRod_PrintedAssembly.STL"
+              scale="0.001 0.001 0.001"/>
+    </asset>
+
+    <worldbody>
+        <light pos="0 0 3"/>
+
+        <geom name="pushrod_assembly"
+              type="mesh"
+              mesh="pushrod"
+              rgba="0.4 0.7 0.9 1"
+              contype="0"
+              conaffinity="0"/>
+    </worldbody>
+
+</mujoco>
